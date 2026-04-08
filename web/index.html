@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vidomator - Custom Video Creator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            color: #888;
+            font-size: 1.1em;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #ddd;
+        }
+        
+        label .required {
+            color: #e74c3c;
+        }
+        
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #e74c3c;
+        }
+        
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+        
+        .char-count {
+            text-align: right;
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .option-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #e74c3c;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(231, 76, 60, 0.3);
+        }
+        
+        .submit-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .info-box {
+            background: rgba(231, 76, 60, 0.1);
+            border-left: 4px solid #e74c3c;
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 24px;
+        }
+        
+        .info-box h3 {
+            margin-bottom: 8px;
+            color: #e74c3c;
+        }
+        
+        .info-box ul {
+            margin-left: 20px;
+            color: #aaa;
+        }
+        
+        .info-box li {
+            margin-bottom: 5px;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.success {
+            display: block;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid #2ecc71;
+            color: #2ecc71;
+        }
+        
+        .status.error {
+            display: block;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+        }
+        
+        .status.loading {
+            display: block;
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px solid #3498db;
+            color: #3498db;
+        }
+        
+        .help-text {
+            font-size: 0.85em;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 Vidomator</h1>
+            <p class="subtitle">Custom Video Creator</p>
+        </header>
+        
+        <div class="card">
+            <div class="info-box">
+                <h3>📝 How it works</h3>
+                <ul>
+                    <li>Enter your video title and script</li>
+                    <li>Choose visual style and options</li>
+                    <li>Click "Create Video"</li>
+                    <li>Video will be generated and uploaded to YouTube</li>
+                    <li>Takes approximately 10-15 minutes</li>
+                </ul>
+            </div>
+            
+            <form id="videoForm">
+                <div class="form-group">
+                    <label for="title">Video Title <span class="required">*</span></label>
+                    <input type="text" id="title" name="title" placeholder="e.g., Breaking: Major Political Development" required>
+                    <div class="char-count"><span id="titleCount">0</span>/100</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="script">Script <span class="required">*</span></label>
+                    <textarea id="script" name="script" placeholder="Enter your full script here... 
+
+Example format:
+Breaking news tonight. In a stunning development, officials have announced...
+
+This story is still developing. We'll bring you updates as they happen." required></textarea>
+                    <div class="char-count"><span id="scriptCount">0</span> characters</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">Description (optional)</label>
+                    <input type="text" id="description" name="description" placeholder="Brief description for YouTube SEO">
+                </div>
+                
+                <div class="form-group">
+                    <label for="tags">Tags (optional, comma-separated)</label>
+                    <input type="text" id="tags" name="tags" placeholder="news, breaking, politics, world">
+                </div>
+                
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">⚙️ Options</h3>
+                    
+                    <div class="options-grid">
+                        <div class="form-group">
+                            <label for="visualStyle">Visual Style</label>
+                            <select id="visualStyle" name="visualStyle">
+                                <option value="mixed">Mixed (Recommended)</option>
+                                <option value="stock">Stock Video Only</option>
+                                <option value="ai">AI Generated Only</option>
+                                <option value="web">Web Images Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="thumbnailStyle">Thumbnail Style</label>
+                            <select id="thumbnailStyle" name="thumbnailStyle">
+                                <option value="viral-news">Viral News (Recommended)</option>
+                                <option value="breaking">Breaking News</option>
+                                <option value="documentary">Documentary</option>
+                                <option value="minimal">Minimal</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="voice">Voice</label>
+                            <select id="voice" name="voice">
+                                <option value="nick">Nick (Default)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="options-grid" style="margin-top: 20px;">
+                        <div class="option-item">
+                            <input type="checkbox" id="music" name="music" checked>
+                            <label for="music" style="margin: 0;">Background Music</label>
+                        </div>
+                        
+                        <div class="option-item">
+                            <input type="checkbox" id="lowerThirds" name="lowerThirds" checked>
+                            <label for="lowerThirds" style="margin: 0;">Lower Thirds</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="submit-btn">🚀 Create Video</button>
+                
+                <div id="status" class="status"></div>
+            </form>
+        </div>
+        
+        <div class="card" style="text-align: center;">
+            <p style="color: #888;">
+                Powered by <strong>Vidomator</strong> | 
+                <a href="#" style="color: #e74c3c;">Documentation</a> | 
+                <a href="#" style="color: #e74c3c;">View Videos</a>
+            </p>
+        </div>
+    </div>
+    
+    <script>
+        // Character counters
+        document.getElementById('title').addEventListener('input', function() {
+            document.getElementById('titleCount').textContent = this.value.length;
+        });
+        
+        document.getElementById('script').addEventListener('input', function() {
+            document.getElementById('scriptCount').textContent = this.value.length;
+        });
+        
+        // Form submission
+        document.getElementById('videoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const statusDiv = document.getElementById('status');
+            const submitBtn = document.querySelector('.submit-btn');
+            
+            // Show loading
+            statusDiv.className = 'status loading';
+            statusDiv.textContent = '🎬 Creating your video... This takes 10-15 minutes.';
+            submitBtn.disabled = true;
+            
+            // Gather form data
+            const formData = {
+                title: document.getElementById('title').value,
+                script: document.getElementById('script').value,
+                description: document.getElementById('description').value,
+                tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t),
+                visualStyle: document.getElementById('visualStyle').value,
+                thumbnailStyle: document.getElementById('thumbnailStyle').value,
+                voice: document.getElementById('voice').value,
+                music: document.getElementById('music').checked,
+                lowerThirds: document.getElementById('lowerThirds').checked
+            };
+            
+            try {
+                // Send to n8n webhook
+                const response = await fetch('/webhook/custom-video', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = `
+                        ✅ Video created successfully!<br>
+                        Video ID: ${result.videoId}<br>
+                        Title: ${result.youtubeTitle}<br><br>
+                        Check your YouTube channel in 10-15 minutes.
+                    `;
+                    document.getElementById('videoForm').reset();
+                    document.getElementById('titleCount').textContent = '0';
+                    document.getElementById('scriptCount').textContent = '0';
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

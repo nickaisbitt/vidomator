@@ -1,0 +1,133 @@
+{
+  "name": "03 - YouTube Publisher",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare upload data\nconst input = $input.all()[0].json;\n\nreturn {\n  videoPath: input.output,\n  thumbnailPath: input.thumbnail?.output || input.output.replace('.mp4', '_thumb.jpg'),\n  title: input.youtubeTitle,\n  description: input.description,\n  tags: input.tags || [],\n  categoryId: '25', // News & Politics\n  videoId: input.videoId\n};"
+      },
+      "name": "Prepare Upload",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "title": "={{ $json.title }}",
+        "description": "={{ $json.description }}",
+        "options": {
+          "categoryId": "={{ $json.categoryId }}",
+          "tags": "={{ $json.tags.join(',') }}",
+          "privacyStatus": "public"
+        }
+      },
+      "name": "YouTube Upload",
+      "type": "n8n-nodes-base.youTube",
+      "position": [650, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "videoId": "={{ $json.id }}",
+        "binaryPropertyName": "data"
+      },
+      "name": "Upload Thumbnail",
+      "type": "n8n-nodes-base.youTube",
+      "position": [850, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/log-publish",
+        "body": {
+          "videoId": "={{ $json.videoId }}",
+          "youtubeVideoId": "={{ $json.id }}",
+          "title": "={{ $json.title }}",
+          "publishedAt": "={{ new Date().toISOString() }}"
+        },
+        "options": {}
+      },
+      "name": "Log to Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 300],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {},
+      "name": "Success",
+      "type": "n8n-nodes-base.noOp",
+      "position": [1250, 300],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Upload": {
+      "main": [
+        [
+          {
+            "node": "YouTube Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube Upload": {
+      "main": [
+        [
+          {
+            "node": "Upload Thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Log to Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Database": {
+      "main": [
+        [
+          {
+            "node": "Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

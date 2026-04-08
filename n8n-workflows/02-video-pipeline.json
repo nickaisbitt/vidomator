@@ -1,0 +1,437 @@
+{
+  "name": "02 - Video Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [250, 300],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.link }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "name": "Fetch Article",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 300],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "dataType": "json",
+        "options": {}
+      },
+      "name": "HTML to Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [650, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.0-flash-exp:free",
+        "options": {}
+      },
+      "name": "Generate Script",
+      "type": "n8n-nodes-base.lmChatOpenAi",
+      "position": [850, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "role": "system",
+              "content": "You are a professional news script writer for 'The Update Desk' YouTube channel. Write engaging, factual news scripts in a broadcast news style."
+            },
+            {
+              "role": "user",
+              "content": "=Write a compelling news script based on this article:\n\nTitle: {{ $json.title }}\nSource: {{ $json.source }}\nContent: {{ $json.content }}\n\nRequirements:\n- Target length: 12-20 minutes of speech (very flexible based on story complexity)\n- Style: Professional news anchor, conversational yet authoritative\n- Structure: Hook intro (30s) → Context background (2-3min) → Main story development (6-12min) → Analysis/implications (3-5min) → Outro (30s)\n- Include specific visual cues for B-roll\n- Add lower third text suggestions\n- Optimize for YouTube virality: strong hook, clear narrative arc, memorable takeaways\n\nReturn JSON format:\n{\n  \"youtubeTitle\": \"Viral-optimized title under 60 chars\",\n  \"description\": \"SEO description with timestamps\",\n  \"tags\": [\"tag1\", \"tag2\", \"tag3\"],\n  \"segments\": [\n    {\n      \"type\": \"intro|background|development|analysis|outro\",\n      \"script\": \"Spoken text...\",\n      \"visualType\": \"stock_video|seedance|web_image|generated_image|static_title\",\n      \"visualQuery\": \"Search query or prompt\",\n      \"lowerThird\": \"Lower third text\",\n      \"duration\": 120\n    }\n  ]\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "LLM Script Prompt",
+      "type": "n8n-nodes-base.openAiFunction",
+      "position": [1050, 300],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse LLM response and prepare segments\nconst response = $input.all()[0].json;\nlet scriptData;\n\ntry {\n  // Try to parse from content\n  const content = response.choices?.[0]?.message?.content || response.content || response;\n  const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || content.match(/{[\\s\\S]*}/);\n  scriptData = JSON.parse(jsonMatch ? jsonMatch[1] || jsonMatch[0] : content);\n} catch (e) {\n  // Fallback structure\n  scriptData = {\n    youtubeTitle: 'Breaking News Update',\n    description: 'Latest news from The Update Desk',\n    tags: ['news', 'breaking'],\n    segments: [{\n      type: 'intro',\n      script: 'Welcome to The Update Desk.',\n      visualType: 'static_title',\n      visualQuery: 'news studio',\n      lowerThird: 'BREAKING NEWS',\n      duration: 60\n    }]\n  };\n}\n\n// Add metadata\nreturn {\n  ...scriptData,\n  articleTitle: $input.all()[0].json.title,\n  articleUrl: $input.all()[0].json.link,\n  articleSource: $input.all()[0].json.source,\n  timestamp: new Date().toISOString(),\n  videoId: Math.random().toString(36).substring(7)\n};"
+      },
+      "name": "Parse Script",
+      "type": "n8n-nodes-base.code",
+      "position": [1250, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split into individual items for each segment\nconst data = $input.all()[0].json;\nconst segments = data.segments || [];\n\nreturn segments.map((segment, index) => ({\n  ...segment,\n  videoId: data.videoId,\n  youtubeTitle: data.youtubeTitle,\n  description: data.description,\n  tags: data.tags,\n  articleTitle: data.articleTitle,\n  articleUrl: data.articleUrl,\n  segmentIndex: index,\n  totalSegments: segments.length\n}));"
+      },
+      "name": "Split Segments",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/generate-image",
+        "body": {
+          "prompt": "={{ $json.visualQuery }}",
+          "output": "=/files/images/{{ $json.videoId }}_{{ $json.segmentIndex }}.jpg",
+          "model": "black-forest-labs/flux.2-klein-4b",
+          "aspectRatio": "16:9"
+        },
+        "options": {}
+      },
+      "name": "Generate Thumbnail",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1650, 200],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.speechify.ai/v1/audio/stream",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "input": "={{ $json.script }}",
+          "voice_id": "nick",
+          "model": "simba-english",
+          "audio_format": "mp3",
+          "options": {
+            "text_normalization": false,
+            "loudness_normalization": true
+          }
+        },
+        "options": {}
+      },
+      "name": "Generate TTS",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1650, 400],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/fetch-visual",
+        "body": {
+          "type": "={{ $json.visualType === 'stock_video' ? 'pexels' : $json.visualType === 'web_image' ? 'web' : 'pexels' }}",
+          "query": "={{ $json.visualQuery }}",
+          "output": "=/files/video/{{ $json.videoId }}_{{ $json.segmentIndex }}.mp4"
+        },
+        "options": {}
+      },
+      "name": "Fetch Visual",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 400],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/generate-seedance",
+        "body": {
+          "prompt": "={{ $json.visualQuery }}",
+          "output": "=/files/video/{{ $json.videoId }}_{{ $json.segmentIndex }}_seedance.mp4",
+          "duration": 8,
+          "width": 1280,
+          "height": 720
+        },
+        "options": {}
+      },
+      "name": "Generate Seedance",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1850, 600],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.visualType }}",
+              "rightValue": "seedance",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Is Seedance?",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 550],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all segment results\nconst allSegments = $input.all();\nconst videoId = allSegments[0].json.videoId;\n\n// Build render manifest\nconst manifest = {\n  output: `/files/output/${videoId}.mp4`,\n  segments: allSegments.map(item => ({\n    type: item.json.type || 'segment',\n    audio: `/files/audio/${videoId}_${item.json.segmentIndex}.mp3`,\n    visual: item.json.visualPath || `/files/video/${videoId}_${item.json.segmentIndex}.mp4`,\n    lowerThird: item.json.lowerThird,\n    title: item.json.type === 'intro' ? item.json.youtubeTitle : undefined\n  })),\n  music: '/files/audio/background_music_1.mp3',\n  musicVolume: 0.15,\n  thumbnail: {\n    output: `/files/images/${videoId}_thumb.jpg`,\n    title: allSegments[0].json.youtubeTitle,\n    image: `/files/images/${videoId}_0.jpg`,\n    style: 'viral-news'\n  }\n};\n\nreturn {\n  ...manifest,\n  youtubeTitle: allSegments[0].json.youtubeTitle,\n  description: allSegments[0].json.description,\n  tags: allSegments[0].json.tags,\n  videoId\n};"
+      },
+      "name": "Build Manifest",
+      "type": "n8n-nodes-base.code",
+      "position": [2050, 400],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/render",
+        "body": {
+          "output": "={{ $json.output }}",
+          "segments": "={{ $json.segments }}",
+          "music": "={{ $json.music }}",
+          "musicVolume": "={{ $json.musicVolume }}",
+          "thumbnail": "={{ $json.thumbnail }}"
+        },
+        "options": {}
+      },
+      "name": "Render Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2250, 400],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://render-service:3000/status/{{ $json.jobId }}",
+        "options": {}
+      },
+      "name": "Poll Render Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2450, 400],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "name": "Wait",
+      "type": "n8n-nodes-base.wait",
+      "position": [2650, 400],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "workflowId": "=03 - YouTube Publisher",
+        "mode": "trigger"
+      },
+      "name": "Publish to YouTube",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [2850, 400],
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Article": {
+      "main": [
+        [
+          {
+            "node": "HTML to Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML to Text": {
+      "main": [
+        [
+          {
+            "node": "Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Script": {
+      "main": [
+        [
+          {
+            "node": "LLM Script Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Script Prompt": {
+      "main": [
+        [
+          {
+            "node": "Parse Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Script": {
+      "main": [
+        [
+          {
+            "node": "Generate Thumbnail",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Segments": {
+      "main": [
+        [
+          {
+            "node": "Generate TTS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Seedance?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate TTS": {
+      "main": [
+        [
+          {
+            "node": "Fetch Visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Visual": {
+      "main": [
+        [
+          {
+            "node": "Build Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Seedance": {
+      "main": [
+        [
+          {
+            "node": "Build Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Seedance?": {
+      "main": [
+        [
+          {
+            "node": "Generate Seedance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Manifest": {
+      "main": [
+        [
+          {
+            "node": "Render Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Video": {
+      "main": [
+        [
+          {
+            "node": "Poll Render Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Render Status": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Publish to YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

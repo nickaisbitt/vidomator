@@ -1,0 +1,19 @@
+{
+  "name": "vidomator-scripts",
+  "version": "1.0.0",
+  "description": "Helper scripts for Vidomator setup",
+  "scripts": {
+    "youtube-auth": "ts-node get-youtube-refresh-token.ts",
+    "test-voices": "ts-node test-speechify-voices.ts"
+  },
+  "dependencies": {
+    "googleapis": "^128.0.0",
+    "axios": "^1.6.2",
+    "open": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
+  }
+}

@@ -1,0 +1,338 @@
+{
+  "name": "04 - Custom Video Creator",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300],
+      "webhookId": "custom-video",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse custom video request\nconst input = $input.all()[0].json;\n\n// Validate required fields\nif (!input.title || !input.script) {\n  return {\n    error: 'Missing required fields: title and script',\n    required: ['title', 'script'],\n    received: Object.keys(input)\n  };\n}\n\n// Set defaults\nreturn {\n  title: input.title,\n  script: input.script,\n  description: input.description || `Custom video: ${input.title}`,\n  tags: input.tags || ['custom', 'news'],\n  visualStyle: input.visualStyle || 'mixed', // stock, ai, web, mixed\n  thumbnailStyle: input.thumbnailStyle || 'viral-news',\n  voice: input.voice || 'nick',\n  music: input.music !== false, // default true\n  lowerThirds: input.lowerThirds !== false, // default true\n  videoId: 'custom_' + Date.now(),\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isEmpty"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Valid Request?",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 300],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.0-flash-exp:free",
+        "options": {}
+      },
+      "name": "Generate Segments",
+      "type": "n8n-nodes-base.lmChatOpenAi",
+      "position": [850, 200],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "messages": {
+          "message": [
+            {
+              "role": "system",
+              "content": "You are a video production assistant. Break down the provided script into segments for video production."
+            },
+            {
+              "role": "user",
+              "content": "=Break this script into video segments:\n\nTitle: {{ $json.title }}\nScript: {{ $json.script }}\n\nCreate 4-6 segments with:\n- Type (intro, content, conclusion)\n- Script portion\n- Visual suggestion (stock video, AI image, web image, or text card)\n- Lower third text\n\nReturn JSON format with segments array."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "LLM Segment Prompt",
+      "type": "n8n-nodes-base.openAiFunction",
+      "position": [1050, 200],
+      "typeVersion": 1.2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build video manifest\nconst input = $input.all()[0].json;\nconst llmResponse = $input.all()[1]?.json;\n\n// Parse segments from LLM or create default\nlet segments = [];\ntry {\n  const content = llmResponse.choices?.[0]?.message?.content || llmResponse.content;\n  const parsed = JSON.parse(content.match(/{[\\s\\S]*}/)[0]);\n  segments = parsed.segments || parsed;\n} catch (e) {\n  // Default segmentation\n  const scriptParts = input.script.split('\\n\\n');\n  segments = scriptParts.map((part, i) => ({\n    type: i === 0 ? 'intro' : i === scriptParts.length - 1 ? 'conclusion' : 'content',\n    script: part,\n    visual: 'mixed',\n    lowerThird: i === 0 ? input.title : ''\n  }));\n}\n\nreturn {\n  ...input,\n  segments: segments.map((s, i) => ({\n    ...s,\n    segmentIndex: i,\n    totalSegments: segments.length\n  }))\n};"
+      },
+      "name": "Build Manifest",
+      "type": "n8n-nodes-base.code",
+      "position": [1250, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split segments for processing\nconst data = $input.all()[0].json;\nreturn data.segments.map(segment => ({\n  ...data,\n  ...segment,\n  segmentScript: segment.script || segment.text\n}));"
+      },
+      "name": "Split Segments",
+      "type": "n8n-nodes-base.code",
+      "position": [1450, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.speechify.ai/v1/audio/stream",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "input": "={{ $json.segmentScript }}",
+          "voice_id": "={{ $json.voice }}",
+          "model": "simba-english",
+          "audio_format": "mp3"
+        },
+        "options": {}
+      },
+      "name": "Generate TTS",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1650, 200],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/generate-image",
+        "body": {
+          "prompt": "={{ $json.visual }}",
+          "output": "=/files/images/custom_{{ $json.videoId }}_{{ $json.segmentIndex }}.jpg",
+          "model": "black-forest-labs/flux.2-klein-4b"
+        },
+        "options": {}
+      },
+      "name": "Generate Visual",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1650, 400],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate results\nconst all = $input.all();\nconst first = all[0].json;\n\nreturn {\n  output: `/files/output/${first.videoId}.mp4`,\n  segments: all.map(item => ({\n    type: item.json.type || 'content',\n    audio: `/files/audio/${first.videoId}_${item.json.segmentIndex}.mp3`,\n    visual: item.json.visualPath || `/files/images/custom_${first.videoId}_${item.json.segmentIndex}.jpg`,\n    lowerThird: item.json.lowerThird || '',\n    title: item.json.type === 'intro' ? first.title : undefined\n  })),\n  thumbnail: {\n    output: `/files/images/${first.videoId}_thumb.jpg`,\n    title: first.title,\n    style: first.thumbnailStyle\n  },\n  youtubeTitle: first.title,\n  description: first.description,\n  tags: first.tags,\n  videoId: first.videoId\n};"
+      },
+      "name": "Aggregate",
+      "type": "n8n-nodes-base.code",
+      "position": [1850, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/render",
+        "body": {
+          "output": "={{ $json.output }}",
+          "segments": "={{ $json.segments }}",
+          "thumbnail": "={{ $json.thumbnail }}"
+        },
+        "options": {}
+      },
+      "name": "Render Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2050, 200],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "workflowId": "=03 - YouTube Publisher",
+        "mode": "trigger"
+      },
+      "name": "Publish to YouTube",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [2250, 200],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  success: true,\n  message: 'Custom video created successfully',\n  videoId: $input.all()[0].json.videoId,\n  youtubeTitle: $input.all()[0].json.youtubeTitle\n};"
+      },
+      "name": "Success Response",
+      "type": "n8n-nodes-base.code",
+      "position": [2450, 200],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  success: false,\n  error: $input.all()[0].json.error || 'Invalid request',\n  required: ['title', 'script']\n};"
+      },
+      "name": "Error Response",
+      "type": "n8n-nodes-base.code",
+      "position": [850, 400],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Valid Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Request?": {
+      "main": [
+        [
+          {
+            "node": "Generate Segments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Segments": {
+      "main": [
+        [
+          {
+            "node": "LLM Segment Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Segment Prompt": {
+      "main": [
+        [
+          {
+            "node": "Build Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Manifest": {
+      "main": [
+        [
+          {
+            "node": "Split Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Segments": {
+      "main": [
+        [
+          {
+            "node": "Generate TTS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate TTS": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Visual": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Render Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Video": {
+      "main": [
+        [
+          {
+            "node": "Publish to YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to YouTube": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

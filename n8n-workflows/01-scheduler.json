@@ -1,0 +1,297 @@
+{
+  "name": "01 - Scheduler (RSS Fetcher)",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "position": [250, 300],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 3
+            }
+          ]
+        }
+      },
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "position": [250, 500],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://www.reutersagency.com/feed/?taxonomy=markets&post_type=reuters-best",
+        "options": {}
+      },
+      "name": "Reuters Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [450, 200],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.bbci.co.uk/news/rss.xml",
+        "options": {}
+      },
+      "name": "BBC Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [450, 350],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
+        "options": {}
+      },
+      "name": "WSJ Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [450, 500],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://www.theguardian.com/world/rss",
+        "options": {}
+      },
+      "name": "Guardian Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [450, 650],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.politico.com/politico/rss/politicopicks",
+        "options": {}
+      },
+      "name": "Politico Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "position": [450, 800],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine all feeds and deduplicate\nconst allItems = [];\n\n// Process each feed\nconst feeds = [\n  { name: 'Reuters', items: $input.all()[0]?.json || [] },\n  { name: 'BBC', items: $input.all()[1]?.json || [] },\n  { name: 'WSJ', items: $input.all()[2]?.json || [] },\n  { name: 'Guardian', items: $input.all()[3]?.json || [] },\n  { name: 'Politico', items: $input.all()[4]?.json || [] }\n];\n\nfeeds.forEach(feed => {\n  if (Array.isArray(feed.items)) {\n    feed.items.forEach(item => {\n      allItems.push({\n        title: item.title || '',\n        link: item.link || '',\n        pubDate: item.pubDate || new Date().toISOString(),\n        content: item.content || item.description || '',\n        source: feed.name,\n        guid: item.guid || item.link || ''\n      });\n    });\n  }\n});\n\n// Deduplicate by link\nconst seen = new Set();\nconst unique = allItems.filter(item => {\n  if (seen.has(item.link)) return false;\n  seen.add(item.link);\n  return true;\n});\n\n// Sort by date (newest first)\nunique.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));\n\n// Return top 20\nreturn unique.slice(0, 20);"
+      },
+      "name": "Combine & Deduplicate",
+      "type": "n8n-nodes-base.code",
+      "position": [700, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Score stories by viral potential\nconst viralKeywords = [\n  'trump', 'biden', 'war', 'crisis', 'breaking', 'scandal', 'arrest', 'death', 'attack',\n  'invasion', 'ceasefire', 'sanctions', 'inflation', 'recession', 'oil', 'gas',\n  'nato', 'ukraine', 'russia', 'china', 'iran', 'israel', 'gaza', 'middle east',\n  'election', 'vote', 'poll', 'resign', 'fired', 'impeach', 'indict'\n];\n\nconst scored = $input.all()[0].json.map(item => {\n  const titleLower = item.title.toLowerCase();\n  const contentLower = (item.content || '').toLowerCase();\n  \n  let score = 0;\n  \n  // Viral keywords\n  viralKeywords.forEach(keyword => {\n    if (titleLower.includes(keyword)) score += 3;\n    if (contentLower.includes(keyword)) score += 1;\n  });\n  \n  // Source authority\n  if (item.source === 'Reuters') score += 2;\n  if (item.source === 'BBC') score += 2;\n  if (item.source === 'WSJ') score += 1;\n  \n  // Recency boost (within last 6 hours)\n  const age = Date.now() - new Date(item.pubDate).getTime();\n  const hoursOld = age / (1000 * 60 * 60);\n  if (hoursOld < 2) score += 5;\n  else if (hoursOld < 6) score += 3;\n  else if (hoursOld < 24) score += 1;\n  \n  return { ...item, score };\n});\n\n// Sort by score\nscored.sort((a, b) => b.score - a.score);\n\n// Return top 5\nreturn scored.slice(0, 5);"
+      },
+      "name": "Score Stories",
+      "type": "n8n-nodes-base.code",
+      "position": [900, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://render-service:3000/check-coverage",
+        "body": {
+          "link": "={{ $json.link }}"
+        },
+        "options": {}
+      },
+      "name": "Check Coverage",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1100, 500],
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.covered }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Not Covered?",
+      "type": "n8n-nodes-base.if",
+      "position": [1300, 500],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "workflowId": "=02 - Video Pipeline",
+        "mode": "trigger"
+      },
+      "name": "Trigger Video Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [1500, 400],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {},
+      "name": "No New Stories",
+      "type": "n8n-nodes-base.noOp",
+      "position": [1500, 600],
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Reuters Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BBC Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "WSJ Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardian Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Politico Feed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reuters Feed": {
+      "main": [
+        [
+          {
+            "node": "Combine & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BBC Feed": {
+      "main": [
+        [
+          {
+            "node": "Combine & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WSJ Feed": {
+      "main": [
+        [
+          {
+            "node": "Combine & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardian Feed": {
+      "main": [
+        [
+          {
+            "node": "Combine & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Politico Feed": {
+      "main": [
+        [
+          {
+            "node": "Combine & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine & Deduplicate": {
+      "main": [
+        [
+          {
+            "node": "Score Stories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Stories": {
+      "main": [
+        [
+          {
+            "node": "Check Coverage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Coverage": {
+      "main": [
+        [
+          {
+            "node": "Not Covered?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Covered?": {
+      "main": [
+        [
+          {
+            "node": "Trigger Video Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Stories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}
