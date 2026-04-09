@@ -87,16 +87,17 @@ echo ""
 # ============================================
 # STEP 6: Deploy
 # ============================================
-echo "STEP 6: Deploy to Railway"
+echo "STEP 6: Deploy render-service to Railway"
 echo "───────────────────────────────────────────────────────"
-echo "railway up"
+echo "railway up --service render-service"
 echo ""
 
 # ============================================
 # STEP 7: Get domain and configure
 # ============================================
-echo "STEP 7: Configure domain"
+echo "STEP 7: Deploy n8n separately and configure domain"
 echo "───────────────────────────────────────────────────────"
+echo "Create n8n as a separate Railway service using the n8nio/n8n image"
 echo "railway domain"
 echo ""
 echo "Copy the domain shown, then set:"

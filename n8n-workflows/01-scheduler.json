@@ -95,10 +95,11 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/check-coverage",
-        "body": {
-          "link": "={{ $json.link }}"
-        },
+      "url": "http://render-service:3000/check-coverage",
+      "body": {
+        "link": "={{ $json.link }}",
+        "title": "={{ $json.title }}"
+      },
         "options": {}
       },
       "name": "Check Coverage",

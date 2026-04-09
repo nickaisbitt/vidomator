@@ -23,7 +23,7 @@ interface VideoSegment {
 
 export class VideoRenderer {
   private logger: Logger;
-  private basePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
+  private basePath = process.env.FILES_BASE_PATH || '/files';
 
   constructor(logger: Logger) {
     this.logger = logger;
@@ -133,8 +133,8 @@ export class VideoRenderer {
           const lowerThirdFilter = this.buildLowerThirdFilter(segment.lowerThird, duration);
           filters.push(`[v]${lowerThirdFilter}[v]`);
         }
-        
-        command.complexFilter(filters)
+        command = command
+          .complexFilter(filters)
           .outputOptions([
             '-map', '[v]',
             '-map', '1:a',

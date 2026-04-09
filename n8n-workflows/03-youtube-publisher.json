@@ -51,7 +51,8 @@
           "videoId": "={{ $json.videoId }}",
           "youtubeVideoId": "={{ $json.id }}",
           "title": "={{ $json.title }}",
-          "publishedAt": "={{ new Date().toISOString() }}"
+          "publishedAt": "={{ new Date().toISOString() }}",
+          "articleUrl": "={{ $json.articleUrl }}"
         },
         "options": {}
       },

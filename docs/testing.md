@@ -77,7 +77,7 @@ docker build -t vidomator-render:test .
 # Test it runs
 docker run -p 3000:3000 \
   -e SPEECHIFY_API_KEY="YOUR_SPEECHIFY_KEY" \
-  -e OPENROUTER_API_KEY="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" \
+  -e OPENROUTER_API_KEY="<your-openrouter-key>" \
   vidomator-render:test
 
 # In another terminal, test health endpoint
@@ -157,7 +157,7 @@ You should see 3 workflows listed.
 1. Settings → Credentials
 2. Add Credential
 3. Search "OpenAI" (OpenRouter uses OpenAI format)
-4. API Key: `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`
+4. API Key: `<your-openrouter-key>`
 5. Base URL: `https://openrouter.ai/api/v1`
 6. Save
 
@@ -378,8 +378,8 @@ If something goes wrong:
 
 3. **Reset if needed:**
    ```bash
-   railway down
-   railway up
+    railway down
+    railway up --service render-service
    ```
 
 4. **Restore workflows:**

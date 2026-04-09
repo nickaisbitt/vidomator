@@ -276,8 +276,8 @@ After 3 hours:
 # View logs
 railway logs
 
-# Restart services
-railway up
+# Restart render service
+railway up --service render-service
 
 # Test voice
 cd scripts && npm run test-voices

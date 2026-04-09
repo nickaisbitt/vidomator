@@ -39,12 +39,12 @@ Go to Railway dashboard → Vidomator project → Variables, and add:
 
 ```
 # Core APIs
-SPEECHIFY_API_KEY=oCx797g08I2OI7hIXE1HmDuEjidE_4hw6J67vtlQ8DY=
-OPENROUTER_API_KEY=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
-BYTEPLUS_ACCESS_KEY=YOUR_BYTEPLUS_ACCESS_KEY
-BYTEPLUS_SECRET_KEY=TURObU56Qm1aakE0WWpJMU5EZzFZV0UzWmpFNE5USTNOVGc0T0dKaE56VQ==
-PEXELS_API_KEY=847frI44WssyMTSu7gBDI3NZ6ALHZbLkiNlOO59yeqmIl9bfSPVHasKO
-PIXABAY_API_KEY=43904947-bad86e055a5a8feabbaab4f17
+SPEECHIFY_API_KEY=<your-speechify-key>
+OPENROUTER_API_KEY=<your-openrouter-key>
+BYTEPLUS_ACCESS_KEY=<your-byteplus-access-key>
+BYTEPLUS_SECRET_KEY=<your-byteplus-secret-key>
+PEXELS_API_KEY=<your-pexels-key>
+PIXABAY_API_KEY=<your-pixabay-key>
 
 # YouTube
 YOUTUBE_CLIENT_ID=YOUR_CLIENT_ID
@@ -62,19 +62,19 @@ N8N_PROTOCOL=https
 WEBHOOK_URL=https://<your-railway-domain>.up.railway.app
 ```
 
-4. **Deploy:**
+4. **Deploy render-service:**
 ```bash
-railway up
+railway up --service render-service
 ```
 
-5. **Get Domain:**
-After deployment, Railway will assign a domain. Copy it and update:
+5. **Deploy n8n separately:**
+Create a second Railway service for n8n using the `n8nio/n8n:1.103.2` image, then set:
 - `N8N_HOST`
 - `WEBHOOK_URL`
 
 Then redeploy:
 ```bash
-railway up
+railway up --service n8n
 ```
 
 ### Phase 3: n8n Setup (15 minutes)
@@ -114,7 +114,7 @@ https://<your-domain>.up.railway.app
 1. **Test Voice:**
 ```bash
 cd scripts
-export SPEECHIFY_API_KEY=oCx797g08I2OI7hIXE1HmDuEjidE_4hw6J67vtlQ8DY=
+export SPEECHIFY_API_KEY="<your-speechify-key>"
 npm run test-voices
 ```
 

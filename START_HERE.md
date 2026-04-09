@@ -13,7 +13,7 @@
 
 ## ⚡ Deploy in 20 Minutes
 
-### Step 1: Run This Command
+### Step 1: Deploy render-service
 
 ```bash
 cd vidomator
@@ -31,19 +31,23 @@ cd vidomator
 - Copy the refresh token shown
 - Paste it when asked
 
-### Step 2: Import Workflows (5 min)
+### Step 2: Deploy n8n separately
+
+Use a separate Railway service for n8n with the `n8nio/n8n` image.
+
+### Step 3: Import Workflows (5 min)
 
 1. Go to the n8n URL shown at end
 2. Login with credentials
 3. Workflows → Import → Select all 3 files from `n8n-workflows/`
 
-### Step 3: Add YouTube (2 min)
+### Step 4: Add YouTube (2 min)
 
 1. Settings → Credentials → Add
 2. Search "YouTube OAuth2 API"
 3. Paste the credentials from Step 1
 
-### Step 4: Go Live (30 seconds)
+### Step 5: Go Live (30 seconds)
 
 1. Open "01 - Scheduler"
 2. Toggle "Active" switch
@@ -84,8 +88,8 @@ Should show: ✅ All checks passed
 # View logs
 railway logs
 
-# Restart
-railway up
+# Restart render-service
+railway up --service render-service
 ```
 
 **Still broken?**

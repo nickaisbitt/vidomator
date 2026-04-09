@@ -51,7 +51,7 @@ Railway Project: Vidomator
 |---------|---------|------------|
 | YouTube Refresh Token | Upload videos | Run `npm run youtube-auth` (see below) |
 
-## 🚀 Quick Start (One-Command Deploy)
+## 🚀 Quick Start (Split Railway Deploy)
 
 ### Option 1: Automated Deployment (Recommended)
 
@@ -66,7 +66,7 @@ This script automates everything:
 - ✅ Gets YouTube refresh token
 - ✅ Creates Railway project
 - ✅ Sets all environment variables
-- ✅ Deploys services
+- ✅ Deploys the services separately
 - ✅ Configures domain
 
 Just follow the prompts and copy your refresh token when shown!
@@ -86,30 +86,32 @@ export YOUTUBE_CLIENT_SECRET="YOUR_CLIENT_SECRET"
 npm run youtube-auth
 ```
 
-#### 2. Deploy to Railway
+#### 2. Deploy `render-service` to Railway
 
 ```bash
 npm install -g @railway/cli
 railway login
 railway init --name Vidomator
-railway up
+railway up --service render-service
 ```
 
-### 4. Configure Environment Variables
+Then create/deploy `n8n` as a separate Railway service using the `n8nio/n8n` image.
+
+### 3. Configure Environment Variables
 
 In Railway dashboard, add these environment variables:
 
 ```bash
 # Required
 SPEECHIFY_API_KEY=${SPEECHIFY_API_KEY}
-OPENROUTER_API_KEY=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
-YOUTUBE_CLIENT_ID=YOUR_CLIENT_ID
-YOUTUBE_CLIENT_SECRET=YOUR_CLIENT_SECRET
+OPENROUTER_API_KEY=<your-openrouter-key>
+YOUTUBE_CLIENT_ID=<your-youtube-client-id>
+YOUTUBE_CLIENT_SECRET=<your-youtube-client-secret>
 YOUTUBE_REFRESH_TOKEN=<from step 2>
-BYTEPLUS_ACCESS_KEY=YOUR_BYTEPLUS_ACCESS_KEY
-BYTEPLUS_SECRET_KEY=TURObU56Qm1aakE0WWpJMU5EZzFZV0UzWmpFNE5USTNOVGc0T0dKaE56VQ==
-PEXELS_API_KEY=847frI44WssyMTSu7gBDI3NZ6ALHZbLkiNlOO59yeqmIl9bfSPVHasKO
-PIXABAY_API_KEY=43904947-bad86e055a5a8feabbaab4f17
+BYTEPLUS_ACCESS_KEY=<your-byteplus-access-key>
+BYTEPLUS_SECRET_KEY=<your-byteplus-secret-key>
+PEXELS_API_KEY=<your-pexels-key>
+PIXABAY_API_KEY=<your-pixabay-key>
 
 # n8n Security (generate strong passwords)
 N8N_BASIC_AUTH_USER=admin
@@ -120,7 +122,7 @@ N8N_PROTOCOL=https
 WEBHOOK_URL=https://<your-railway-domain>.up.railway.app
 ```
 
-### 5. Import n8n Workflows
+### 4. Import n8n Workflows
 
 1. Access n8n at `https://<your-domain>.up.railway.app`
 2. Login with your credentials
@@ -130,7 +132,7 @@ WEBHOOK_URL=https://<your-railway-domain>.up.railway.app
    - `02-video-pipeline.json`
    - `03-youtube-publisher.json`
 
-### 6. Configure YouTube Credentials in n8n
+### 5. Configure YouTube Credentials in n8n
 
 1. In n8n, go to Settings → Credentials
 2. Add "YouTube OAuth2 API" credential
@@ -140,7 +142,7 @@ WEBHOOK_URL=https://<your-railway-domain>.up.railway.app
    - Access Token: Leave blank (will be filled by refresh token)
    - Refresh Token: Your refresh token from step 2
 
-### Voice Configuration
+### 6. Voice Configuration
 
 The system is configured to use **"nick"** voice as requested.
 
@@ -156,7 +158,7 @@ This will generate a test audio file with the "nick" voice.
 
 Listen to the samples in `test-output/` and note your preferred voice ID.
 
-### 8. Activate Workflows
+### 7. Activate Workflows
 
 1. In n8n, activate the "01 - Scheduler" workflow
 2. It will run every 3 hours (8x daily)
@@ -210,7 +212,7 @@ Edit `render-service/src/templates/thumbnails.ts`:
 
 ```
 vidomator/
-├── docker-compose.yml          # Railway deployment config
+├── docker-compose.yml          # Local multi-service config
 ├── n8n-workflows/              # Importable workflow JSONs
 │   ├── 01-scheduler.json
 │   ├── 02-video-pipeline.json
@@ -241,9 +243,13 @@ vidomator/
 - Check n8n execution logs for errors
 
 ### Render service failing
-- Check Railway logs: `railway logs`
-- Verify all environment variables are set
-- Ensure /files volume has enough space
+- Check Railway logs for `render-service` specifically
+- Verify all render env vars are set
+- Ensure `/files` volume has enough space
+
+## Railway Split Deployment
+
+See `docs/railway-deployment.md` for the 10-step checklist.
 
 ### No images being found
 - Pexels/Pixabay rate limits: Wait and retry

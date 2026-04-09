@@ -45,7 +45,7 @@ export class ThumbnailGenerator {
         quality: 95
       });
 
-      this.logger.info({ output, title, style }, 'Thumbnail generated');
+       this.logger.info('Thumbnail generated', { output, title, style });
 
     } finally {
       await browser.close();

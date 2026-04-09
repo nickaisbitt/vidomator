@@ -15,7 +15,7 @@ A complete automated YouTube news video generation system:
 
 ## Quick Start (30 minutes)
 
-### Step 1: Deploy (10 min)
+### Step 1: Deploy render-service (10 min)
 
 ```bash
 cd vidomator
@@ -26,8 +26,8 @@ cd vidomator
 1. Gets YouTube refresh token (opens browser)
 2. Creates Railway project "Vidomator"
 3. Sets all environment variables
-4. Deploys n8n + render service
-5. Gives you the n8n URL and password
+    4. Deploys render-service first
+    5. Then deploys n8n as a separate Railway service
 
 **You'll need:**
 - Railway account (free to sign up)
@@ -95,8 +95,8 @@ npm run test-voices
 # View Railway logs
 railway logs
 
-# Restart services
-railway up
+# Restart render-service
+railway up --service render-service
 
 # Test voice again
 cd scripts && npm run test-voices
@@ -104,6 +104,10 @@ cd scripts && npm run test-voices
 # Check render service health
 curl https://<your-domain>/health
 ```
+
+## Railway Split Deployment
+
+Follow `docs/railway-deployment.md` for the 10-step Railway checklist.
 
 ## Troubleshooting
 
@@ -127,15 +131,10 @@ curl https://<your-domain>/health
 - **Testing Guide:** `docs/testing.md`
 - **README:** `README.md`
 
-## Your API Keys (Already Configured)
+## Your API Keys
 
-All your credentials are ready:
-- ✅ Speechify: `YOUR_SPEECHIFY_KEY`
-- ✅ OpenRouter: `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`
-- ✅ BytePlus/Seedance: Access + Secret keys provided
-- ✅ Pexels: `847frI44WssyMTSu7gBDI3NZ6ALHZbLkiNlOO59yeqmIl9bfSPVHasKO`
-- ✅ Pixabay: `43904947-bad86e055a5a8feabbaab4f17`
-- ✅ YouTube OAuth: Client ID + Secret provided
+All credentials should be configured as Railway environment variables.
+See `.env.example` for the full list of required keys.
 
 ## Support
 

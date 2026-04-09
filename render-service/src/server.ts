@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import winston from 'winston';
 import { VideoRenderer } from './ffmpeg';
@@ -9,6 +11,27 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const filesBasePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
+const logsDir = path.join(filesBasePath, 'logs');
+fs.mkdirSync(logsDir, { recursive: true });
+
+const publishLogPath = path.join(logsDir, 'published.json');
+
+function readPublishedVideos(): Array<{ videoId?: string; youtubeVideoId?: string; title?: string; publishedAt?: string; articleUrl?: string }> {
+  try {
+    if (!fs.existsSync(publishLogPath)) return [];
+    const raw = fs.readFileSync(publishLogPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePublishedVideos(items: Array<{ videoId?: string; youtubeVideoId?: string; title?: string; publishedAt?: string; articleUrl?: string }>) {
+  fs.writeFileSync(publishLogPath, JSON.stringify(items, null, 2));
+}
+
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -17,7 +40,9 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console(),
-    new winston.transports.File({ filename: '/files/logs/render-service.log' })
+    ...(process.env.NODE_ENV === 'production'
+      ? [new winston.transports.File({ filename: path.join(logsDir, 'render-service.log') })]
+      : [new winston.transports.File({ filename: path.join(logsDir, 'render-service.log') })])
   ]
 });
 
@@ -68,7 +93,7 @@ app.post('/render', async (req, res) => {
     };
     jobs.set(jobId, job);
 
-    logger.info({ jobId, segments: segments.length }, 'Starting video render');
+     logger.info('Starting video render', { jobId, segments: segments.length });
 
     // Start processing in background
     processVideo(jobId, output, segments, music, musicVolume, thumbnail);
@@ -80,7 +105,7 @@ app.post('/render', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error({ jobId, error }, 'Failed to start render');
+    logger.error('Failed to start render', { jobId, error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({ 
       error: 'Failed to start render',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -95,6 +120,35 @@ app.get('/status/:jobId', (req, res) => {
     return res.status(404).json({ error: 'Job not found' });
   }
   res.json(job);
+});
+
+// Check if an article has already been covered
+app.post('/check-coverage', (req, res) => {
+  const { link, title } = req.body;
+  const published = readPublishedVideos();
+  const covered = published.some(item => (link && item.articleUrl === link) || (title && item.title === title));
+
+  res.json({
+    covered,
+    link,
+    title,
+    publishedCount: published.length
+  });
+});
+
+// Log published videos for dedupe/traceability
+app.post('/log-publish', (req, res) => {
+  try {
+    const { videoId, youtubeVideoId, title, publishedAt, articleUrl } = req.body;
+    const published = readPublishedVideos();
+    published.unshift({ videoId, youtubeVideoId, title, publishedAt, articleUrl });
+    writePublishedVideos(published.slice(0, 500));
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to log publish', { error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+  }
 });
 
 // Process video
@@ -121,7 +175,7 @@ async function processVideo(
       job.progress = progress;
       job.updatedAt = new Date();
       jobs.set(jobId, job);
-      logger.info({ jobId, progress }, 'Render progress');
+      logger.info('Render progress', { jobId, progress });
     };
 
     // Render video
@@ -151,7 +205,7 @@ async function processVideo(
     job.updatedAt = new Date();
     jobs.set(jobId, job);
 
-    logger.info({ jobId, output: outputPath }, 'Video render complete');
+    logger.info('Video render complete', { jobId, output: outputPath });
 
   } catch (error) {
     job.status = 'failed';
@@ -159,7 +213,7 @@ async function processVideo(
     job.updatedAt = new Date();
     jobs.set(jobId, job);
 
-    logger.error({ jobId, error }, 'Video render failed');
+    logger.error('Video render failed', { jobId, error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -186,7 +240,7 @@ app.post('/fetch-visual', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    logger.error({ error }, 'Failed to fetch visual');
+     logger.error('Failed to fetch visual', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({
       error: 'Failed to fetch visual',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -204,7 +258,7 @@ app.post('/generate-image', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    logger.error({ error }, 'Failed to generate image');
+     logger.error('Failed to generate image', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({
       error: 'Failed to generate image',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -222,7 +276,7 @@ app.post('/generate-seedance', async (req, res) => {
     
     res.json(result);
   } catch (error) {
-    logger.error({ error }, 'Failed to generate Seedance clip');
+     logger.error('Failed to generate Seedance clip', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({
       error: 'Failed to generate Seedance clip',
       details: error instanceof Error ? error.message : 'Unknown error'
@@ -241,5 +295,5 @@ setInterval(() => {
 }, 60000); // Every minute
 
 app.listen(PORT, () => {
-  logger.info({ port: PORT }, 'Vidomator Render Service started');
+   logger.info('Vidomator Render Service started', { port: PORT });
 });

@@ -49,8 +49,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies needed to build
+RUN npm ci
 
 # Copy app source
 COPY . .
@@ -59,7 +59,10 @@ COPY . .
 RUN npm run build
 
 # Create directories
-RUN mkdir -p /files/{audio,video,images,temp,output,binary}
+RUN mkdir -p /files/{audio,video,images,temp,output,binary,logs}
+
+# Remove dev dependencies for runtime
+RUN npm prune --omit=dev
 
 # Expose port
 EXPOSE 3000

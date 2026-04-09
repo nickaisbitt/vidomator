@@ -2,7 +2,8 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "render-service/Dockerfile"
+    "dockerfilePath": "Dockerfile",
+    "watchPatterns": ["src/**", "package.json", "tsconfig.json", "Dockerfile"]
   },
   "deploy": {
     "startCommand": "npm start",

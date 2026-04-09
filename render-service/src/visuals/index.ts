@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export class VisualFetcher {
   private logger: Logger;
-  private basePath = process.env.FILES_BASE_PATH || '/files';
+  private basePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
   
   // API Keys
   private pexelsKey = process.env.PEXELS_API_KEY;
@@ -51,16 +51,16 @@ export class VisualFetcher {
       const writer = fs.createWriteStream(output);
       videoResponse.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         writer.on('finish', resolve);
         writer.on('error', reject);
       });
 
-      this.logger.info({ query, source: 'pexels', output }, 'Downloaded video from Pexels');
+       this.logger.info('Downloaded video from Pexels', { query, source: 'pexels', output });
       return { success: true, path: output };
 
     } catch (error) {
-      this.logger.error({ query, error }, 'Failed to fetch from Pexels');
+       this.logger.error('Failed to fetch from Pexels', { query, error: error instanceof Error ? error.message : String(error) });
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
@@ -96,16 +96,16 @@ export class VisualFetcher {
       const writer = fs.createWriteStream(output);
       videoResponse.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         writer.on('finish', resolve);
         writer.on('error', reject);
       });
 
-      this.logger.info({ query, source: 'pixabay', output }, 'Downloaded video from Pixabay');
+       this.logger.info('Downloaded video from Pixabay', { query, source: 'pixabay', output });
       return { success: true, path: output };
 
     } catch (error) {
-      this.logger.error({ query, error }, 'Failed to fetch from Pixabay');
+       this.logger.error('Failed to fetch from Pixabay', { query, error: error instanceof Error ? error.message : String(error) });
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
@@ -154,7 +154,7 @@ export class VisualFetcher {
 
           fs.writeFileSync(output, Buffer.from(imageResponse.data));
           
-          this.logger.info({ query, source: 'web', output }, 'Downloaded image from web');
+           this.logger.info('Downloaded image from web', { query, source: 'web', output });
           return { success: true, path: output };
           
         } catch (err) {
@@ -164,10 +164,10 @@ export class VisualFetcher {
 
       return { success: false, error: 'Failed to download any suitable image' };
 
-    } catch (error) {
-      this.logger.error({ query, error }, 'Failed to fetch from web');
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+     } catch (error) {
+        this.logger.error('Failed to fetch from web', { query, error: error instanceof Error ? error.message : String(error) });
+       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+     }
   }
 
   // Generate image via OpenRouter (Flux, Gemini, etc.)
@@ -237,13 +237,13 @@ export class VisualFetcher {
 
       const cost = response.data.usage?.total_cost || 0;
       
-      this.logger.info({ prompt, model, output, cost }, 'Generated image via OpenRouter');
+       this.logger.info('Generated image via OpenRouter', { prompt, model, output, cost });
       return { success: true, path: output, cost };
 
-    } catch (error) {
-      this.logger.error({ prompt, model, error }, 'Failed to generate image');
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+     } catch (error) {
+       this.logger.error('Image generation failed', { model, error: error instanceof Error ? error.message : String(error) });
+       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+     }
   }
 
   // Generate video via Seedance (BytePlus)
@@ -285,7 +285,7 @@ export class VisualFetcher {
         return { success: false, error: 'No job ID returned' };
       }
 
-      this.logger.info({ prompt, jobId }, 'Seedance generation started');
+       this.logger.info('Seedance generation started', { prompt, jobId });
 
       // Poll for completion
       const maxAttempts = 30;
@@ -311,14 +311,14 @@ export class VisualFetcher {
           // Download video
           const videoResponse = await axios.get(videoUrl, { responseType: 'stream' });
           const writer = fs.createWriteStream(output);
-          videoResponse.data.pipe(writer);
+       videoResponse.data.pipe(writer);
+       
+       await new Promise<void>((resolve, reject) => {
+         writer.once('finish', resolve);
+         writer.once('error', reject);
+       });
 
-          await new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
-          });
-
-          this.logger.info({ prompt, jobId, output }, 'Seedance generation complete');
+          this.logger.info('Seedance generation complete', { prompt, jobId, output });
           return { success: true, path: output, jobId };
           
         } else if (status === 'failed') {
@@ -330,7 +330,7 @@ export class VisualFetcher {
       return { success: false, error: 'Generation timeout', jobId };
 
     } catch (error) {
-      this.logger.error({ prompt, error }, 'Failed to generate Seedance video');
+       this.logger.error('Failed to generate Seedance video', { prompt, error: error instanceof Error ? error.message : String(error) });
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
@@ -353,11 +353,11 @@ export class VisualFetcher {
 
       const balance = response.data.balance || response.data.credits || 0;
       
-      this.logger.info({ balance }, 'BytePlus account balance checked');
+       this.logger.info('BytePlus account balance checked', { balance });
       return { success: true, balance };
 
     } catch (error) {
-      this.logger.error({ error }, 'Failed to check BytePlus balance');
+       this.logger.error('Failed to check BytePlus balance', { error: error instanceof Error ? error.message : String(error) });
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
