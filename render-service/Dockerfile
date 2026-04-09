@@ -1,7 +1,25 @@
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copy package files first for layer caching
+COPY package*.json ./
+
+# Install all dependencies (including dev for TypeScript)
+RUN npm ci
+
+# Copy source and build
+COPY . .
+RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --omit=dev
+
+# --- Production stage ---
 FROM node:20-slim
 
-# Install FFmpeg and dependencies
-RUN apt-get update && apt-get install -y \
+# Install FFmpeg and Puppeteer dependencies in one layer
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
     ca-certificates \
@@ -40,36 +58,21 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     lsb-release \
     xdg-utils \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy only production artifacts from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Install dependencies needed to build
-RUN npm ci
-
-# Copy app source
-COPY . .
-
-# Build TypeScript
-RUN npm run build
-
-# Create directories
+# Create directories for file storage
 RUN mkdir -p /files/{audio,video,images,temp,output,binary,logs}
 
-# Remove dev dependencies for runtime
-RUN npm prune --omit=dev
-
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget --spider -q http://localhost:3000/health || exit 1
 
-# Start the server
 CMD ["npm", "start"]
