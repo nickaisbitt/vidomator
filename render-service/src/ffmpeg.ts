@@ -221,11 +221,11 @@ export class VideoRenderer {
     volume: number
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      // UNBREAKABLE AUDIO: Use stream_loop -1 on music and simple amix
+      // UNBREAKABLE AUDIO: Surgically loop Input 1 (Music) and mix with Input 0 (Video Audio)
       ffmpeg()
         .input(videoPath)
         .input(musicPath)
-        .inputOptions(['-stream_loop', '-1']) // Loop music at the input level
+        .inputOptions(['-stream_loop', '-1'], 1) // CRITICAL: Apply loop to Input 1 (Music) ONLY
         .complexFilter([
           `[1:a]volume=${volume}[music]`,
           `[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`

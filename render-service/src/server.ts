@@ -481,8 +481,11 @@ app.post('/auto-produce', async (req, res) => {
       try {
         let openRouterKey = process.env.OPENROUTER_API_KEY;
         if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not set');
-        // SANITIZATION: Remove any potential hidden whitespace/chars from Railway env
+        // SANITIZATION: Remove any potential hidden whitespace/chars
         openRouterKey = openRouterKey.trim().replace(/[\r\n]/g, '');
+        
+        // AUTH PROBE: Log safe diagnostic info
+        console.log(`[INFO] AI Key Probe: Length=${openRouterKey.length}, Prefix=${openRouterKey.substring(0, 10)}...`);
 
         const response = await axios.post(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -578,7 +581,7 @@ app.post('/auto-produce', async (req, res) => {
             const speechifyResponse = await axios.post(
               'https://api.speechify.ai/v1/audio/stream',
               {
-                input: seg.script,
+                input: seg.text,
                 voice_id: 'nick',
                 model: 'simba-english',
                 audio_format: 'mp3',
