@@ -1,9 +1,10 @@
 {
   "name": "vidomator-render-service",
-  "version": "1.0.0",
+  "version": "2.0.0-SCORCHED-EARTH",
   "description": "FFmpeg video assembly service for The Update Desk",
   "main": "dist/server.js",
   "scripts": {
+    "prebuild": "rm -rf dist",
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
