@@ -4,6 +4,10 @@ FROM ghcr.io/puppeteer/puppeteer:21.6.1
 # Switch to root to install FFmpeg
 USER root
 
+# Remove Google Chrome apt sources because they often have missing/expired GPG keys
+# which breaks `apt-get update`. We don't need to update Chrome, just need ffmpeg.
+RUN rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google.list
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
