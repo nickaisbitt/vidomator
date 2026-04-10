@@ -36,45 +36,20 @@ export class VideoRenderer {
     fs.mkdirSync(tempDir, { recursive: true });
 
     try {
-      // Phase 1: Process each segment (0-50%)
+      // Phase 1: Process each segment (0-80%)
       const processedSegments: string[] = [];
-      
       for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
         const segmentFile = path.join(tempDir, `segment_${i}.mp4`);
-        
         await this.processSegment(segment, segmentFile);
         processedSegments.push(segmentFile);
-        
-        onProgress?.(Math.round((i + 1) / segments.length * 50));
+        onProgress?.(Math.round((i + 1) / segments.length * 80));
       }
 
-      // Phase 2: Concatenate segments (50-80%)
-      const concatFile = path.join(tempDir, 'concat.txt');
-      const concatList = processedSegments.map(s => `file '${s}'`).join('\n');
-      fs.writeFileSync(concatFile, concatList);
-
-      const concatOutput = path.join(tempDir, 'concatenated.mp4');
-      await this.concatenateSegments(concatFile, concatOutput);
-      
-      onProgress?.(80);
-
-      // Phase 3: Add background music if provided (80-90%)
-      let finalOutput = concatOutput;
-      if (music && fs.existsSync(music)) {
-        const withMusic = path.join(tempDir, 'with_music.mp4');
-        await this.addBackgroundMusic(concatOutput, music, withMusic, musicVolume);
-        finalOutput = withMusic;
-        onProgress?.(90);
-      }
-
-       // Phase 4: Final encoding (90-100%)
-       await this.finalEncode(finalOutput, output);
-       
-       onProgress?.(100);
-       
-       this.logger.info('Video render complete', { output });
-
+      // Phase 2: Linear Assembly - Assemble all segments + music in one robust pass (80-100%)
+      await this.assembleFinalBroadcast(processedSegments, music, musicVolume, output);
+      onProgress?.(100);
+      this.logger.info('Video render complete', { output });
     } finally {
       // Cleanup temp files
       this.cleanup(tempDir);
@@ -145,47 +120,25 @@ export class VideoRenderer {
   }
 
   private async createAudioOnlySegment(segment: VideoSegment, output: string): Promise<void> {
+    // Basic black background for segments without visuals
     return new Promise((resolve, reject) => {
-      ffmpeg.ffprobe(segment.audio, (err, metadata) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        
-        const duration = metadata.format.duration || 10;
-        
-        // Generate black background with optional title
-        let videoFilter = 'color=c=black:s=1920x1080:d=' + duration;
-        
-        if (segment.title) {
-          const escapedTitle = segment.title.replace(/'/g, "'\\''");
-          videoFilter += `,drawtext=text='${escapedTitle}':fontcolor=white:fontsize=72:x=(w-text_w)/2:y=(h-text_h)/2:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf`;
-        }
-        
-        if (segment.lowerThird) {
-          const escapedLowerThird = segment.lowerThird.replace(/'/g, "'\\''");
-          videoFilter += `,drawtext=text='${escapedLowerThird}':fontcolor=white:fontsize=48:x=100:y=h-100:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf:box=1:boxcolor=red@0.8:boxborderw=10`;
-        }
-        
-        ffmpeg()
-          .input(segment.audio)
-          .inputFormat('mp3')
-          .outputOptions([
-            '-f', 'lavfi',
-            '-i', videoFilter,
-            '-shortest',
-            '-c:v', 'libx264',
-            '-preset', 'fast',
-            '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '128k',
-            '-y'
-          ])
-          .output(output)
-          .on('end', () => resolve())
-          .on('error', reject)
-          .run();
-      });
+      ffmpeg()
+        .input('color=c=black:s=1920x1080:d=10')
+        .inputOptions(['-f', 'lavfi'])
+        .input(segment.audio)
+        .outputOptions([
+          '-c:v', 'libx264',
+          '-tune', 'stillimage',
+          '-c:a', 'aac',
+          '-b:a', '128k',
+          '-shortest',
+          '-pix_fmt', 'yuv420p',
+          '-y'
+        ])
+        .output(output)
+        .on('end', () => resolve())
+        .on('error', reject)
+        .run();
     });
   }
 
@@ -198,52 +151,56 @@ export class VideoRenderer {
            `x=50:y=h-85:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf`;
   }
 
-  private async concatenateSegments(concatFile: string, output: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(concatFile)
-        .inputOptions(['-f', 'concat', '-safe', '0'])
-        .outputOptions([
-          '-c', 'copy',
-          '-y'
-        ])
-        .output(output)
-        .on('end', () => resolve())
-        .on('error', reject)
-        .run();
-    });
-  }
-
-  private async addBackgroundMusic(
-    videoPath: string, 
-    musicPath: string, 
-    output: string,
-    volume: number
+  private async assembleFinalBroadcast(
+    segmentPaths: string[],
+    musicPath: string | undefined,
+    musicVolume: number,
+    output: string
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      // UNBREAKABLE AUDIO: Surgically loop Input 1 (Music) and mix with Input 0 (Video Audio)
-      ffmpeg()
-        .input(videoPath)
-        .input(musicPath)
-        .inputOptions(['-stream_loop', '-1'], 1) // CRITICAL: Apply loop to Input 1 (Music) ONLY
-        .complexFilter([
-          `[1:a]volume=${volume}[music]`,
-          `[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
-        ])
+      let command = ffmpeg();
+      
+      // 1. Add all segments
+      segmentPaths.forEach(p => command = command.input(p));
+      
+      // 2. Add music if provided
+      const hasMusic = musicPath && fs.existsSync(musicPath);
+      if (hasMusic) {
+        command = command.input(musicPath!).inputOptions(['-stream_loop', '-1']);
+      }
+
+      const segmentCount = segmentPaths.length;
+      
+      // 3. Build the simplest possible concat + mix filter
+      // [0:v][0:a][1:v][1:a]...concat=n=X:v=1:a=1[v][a]
+      let filter = '';
+      for (let i = 0; i < segmentCount; i++) {
+        filter += `[${i}:v][${i}:a]`;
+      }
+      filter += `concat=n=${segmentCount}:v=1:a=1[vv][aa]`;
+
+      if (hasMusic) {
+        // [aa][music_input:a]amix=inputs=2:duration=first[a]
+        filter += `;[${segmentCount}:a]volume=${musicVolume}[m];[aa][m]amix=inputs=2:duration=first[a]`;
+      }
+
+      command
+        .complexFilter(filter)
         .outputOptions([
-          '-map', '0:v',
-          '-map', '[a]',
-          '-c:v', 'copy', // Copy video to save time/CPU
+          '-map', '[vv]',
+          '-map', hasMusic ? '[a]' : '[aa]',
+          '-c:v', 'libx264',
+          '-preset', 'fast',
+          '-crf', '23',
           '-c:a', 'aac',
           '-b:a', '128k',
-          '-shortest',
           '-y'
         ])
         .output(output)
-        .on('start', (cmd) => console.log(`[INFO] RAW Music Mix: ${cmd}`))
+        .on('start', (cmd) => console.log(`[INFO] Final Assembly Started: ${cmd}`))
         .on('end', () => resolve())
         .on('error', (err) => {
-          console.error(`[ERRO] Music mix failed`, { error: err.message });
+          console.error(`[ERRO] Final Assembly Failed`, { error: err.message });
           reject(err);
         })
         .run();
