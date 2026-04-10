@@ -23,7 +23,7 @@
       "name": "Fetch Article",
       "type": "n8n-nodes-base.httpRequest",
       "position": [450, 300],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -61,7 +61,7 @@
       "name": "Generate Script",
       "type": "n8n-nodes-base.httpRequest",
       "position": [950, 300],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -84,7 +84,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/generate-image",
+        "url": "https://render-service-production-3b75.up.railway.app/generate-image",
         "body": {
           "prompt": "={{ $json.visualQuery }}",
           "output": "=/files/images/{{ $json.videoId }}_{{ $json.segmentIndex }}.jpg",
@@ -96,7 +96,7 @@
       "name": "Generate Thumbnail",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1650, 200],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -121,12 +121,12 @@
       "name": "Generate TTS",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1650, 400],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/fetch-visual",
+        "url": "https://render-service-production-3b75.up.railway.app/fetch-visual",
         "body": {
           "type": "={{ $json.visualType === 'stock_video' ? 'pexels' : $json.visualType === 'web_image' ? 'web' : 'pexels' }}",
           "query": "={{ $json.visualQuery }}",
@@ -137,12 +137,12 @@
       "name": "Fetch Visual",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1850, 400],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/generate-seedance",
+        "url": "https://render-service-production-3b75.up.railway.app/generate-seedance",
         "body": {
           "prompt": "={{ $json.visualQuery }}",
           "output": "=/files/video/{{ $json.videoId }}_{{ $json.segmentIndex }}_seedance.mp4",
@@ -155,7 +155,7 @@
       "name": "Generate Seedance",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1850, 600],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -195,7 +195,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/render",
+        "url": "https://render-service-production-3b75.up.railway.app/render",
         "body": {
           "output": "={{ $json.output }}",
           "segments": "={{ $json.segments }}",
@@ -208,18 +208,18 @@
       "name": "Render Video",
       "type": "n8n-nodes-base.httpRequest",
       "position": [2250, 400],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "http://render-service:3000/status/{{ $json.jobId }}",
+        "url": "https://render-service-production-3b75.up.railway.app/status/{{ $json.jobId }}",
         "options": {}
       },
       "name": "Poll Render Status",
       "type": "n8n-nodes-base.httpRequest",
       "position": [2450, 400],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {

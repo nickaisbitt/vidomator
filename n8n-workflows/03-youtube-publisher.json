@@ -20,7 +20,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/publish-to-youtube",
+        "url": "https://render-service-production-3b75.up.railway.app/publish-to-youtube",
         "body": {
           "videoPath": "={{ $json.videoPath }}",
           "title": "={{ $json.title }}",
@@ -33,12 +33,12 @@
       "name": "YouTube Upload",
       "type": "n8n-nodes-base.httpRequest",
       "position": [650, 300],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/log-publish",
+        "url": "https://render-service-production-3b75.up.railway.app/log-publish",
         "body": {
           "videoId": "={{ $('Prepare Upload').item.json.videoId }}",
           "youtubeVideoId": "={{ $json.data.id }}",
@@ -51,7 +51,7 @@
       "name": "Log to Database",
       "type": "n8n-nodes-base.httpRequest",
       "position": [850, 300],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {},

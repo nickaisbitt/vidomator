@@ -26,13 +26,14 @@
     },
     {
       "parameters": {
-        "url": "https://www.reutersagency.com/feed/?taxonomy=markets&post_type=reuters-best",
+        "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
         "options": {}
       },
-      "name": "Reuters Feed",
+      "name": "NYT Feed",
       "type": "n8n-nodes-base.rssFeedRead",
       "position": [450, 200],
-      "typeVersion": 1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -42,7 +43,8 @@
       "name": "BBC Feed",
       "type": "n8n-nodes-base.rssFeedRead",
       "position": [450, 350],
-      "typeVersion": 1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -52,7 +54,8 @@
       "name": "WSJ Feed",
       "type": "n8n-nodes-base.rssFeedRead",
       "position": [450, 500],
-      "typeVersion": 1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -62,21 +65,23 @@
       "name": "Guardian Feed",
       "type": "n8n-nodes-base.rssFeedRead",
       "position": [450, 650],
-      "typeVersion": 1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "url": "https://feeds.politico.com/politico/rss/politicopicks",
+        "url": "https://rss.politico.com/politics-news.xml",
         "options": {}
       },
       "name": "Politico Feed",
       "type": "n8n-nodes-base.rssFeedRead",
       "position": [450, 800],
-      "typeVersion": 1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Combine all feeds and deduplicate\nconst allItems = [];\n\n// Process each feed\nconst feeds = [\n  { name: 'Reuters', items: $input.all()[0]?.json || [] },\n  { name: 'BBC', items: $input.all()[1]?.json || [] },\n  { name: 'WSJ', items: $input.all()[2]?.json || [] },\n  { name: 'Guardian', items: $input.all()[3]?.json || [] },\n  { name: 'Politico', items: $input.all()[4]?.json || [] }\n];\n\nfeeds.forEach(feed => {\n  if (Array.isArray(feed.items)) {\n    feed.items.forEach(item => {\n      allItems.push({\n        title: item.title || '',\n        link: item.link || '',\n        pubDate: item.pubDate || new Date().toISOString(),\n        content: item.content || item.description || '',\n        source: feed.name,\n        guid: item.guid || item.link || ''\n      });\n    });\n  }\n});\n\n// Deduplicate by link\nconst seen = new Set();\nconst unique = allItems.filter(item => {\n  if (seen.has(item.link)) return false;\n  seen.add(item.link);\n  return true;\n});\n\n// Sort by date (newest first)\nunique.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));\n\n// Return top 20\nreturn unique.slice(0, 20);"
+        "jsCode": "// Combine all feeds and deduplicate\nconst allItems = [];\n\n// Process each input - each feed sends items individually\nconst inputs = $input.all();\n\nfor (const input of inputs) {\n  const item = input.json;\n  if (item && item.title) {\n    allItems.push({\n      title: item.title || '',\n      link: item.link || '',\n      pubDate: item.pubDate || item.isoDate || new Date().toISOString(),\n      content: item.contentSnippet || item.content || item.description || '',\n      source: item.creator || 'Unknown',\n      guid: item.guid || item.link || ''\n    });\n  }\n}\n\n// Deduplicate by link\nconst seen = new Set();\nconst unique = allItems.filter(item => {\n  if (!item.link || seen.has(item.link)) return false;\n  seen.add(item.link);\n  return true;\n});\n\n// Sort by date (newest first)\nunique.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));\n\n// Return top 20\nreturn unique.slice(0, 20).map(item => ({ json: item }));"
       },
       "name": "Combine & Deduplicate",
       "type": "n8n-nodes-base.code",
@@ -85,7 +90,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Score stories by viral potential\nconst viralKeywords = [\n  'trump', 'biden', 'war', 'crisis', 'breaking', 'scandal', 'arrest', 'death', 'attack',\n  'invasion', 'ceasefire', 'sanctions', 'inflation', 'recession', 'oil', 'gas',\n  'nato', 'ukraine', 'russia', 'china', 'iran', 'israel', 'gaza', 'middle east',\n  'election', 'vote', 'poll', 'resign', 'fired', 'impeach', 'indict'\n];\n\nconst scored = $input.all()[0].json.map(item => {\n  const titleLower = item.title.toLowerCase();\n  const contentLower = (item.content || '').toLowerCase();\n  \n  let score = 0;\n  \n  // Viral keywords\n  viralKeywords.forEach(keyword => {\n    if (titleLower.includes(keyword)) score += 3;\n    if (contentLower.includes(keyword)) score += 1;\n  });\n  \n  // Source authority\n  if (item.source === 'Reuters') score += 2;\n  if (item.source === 'BBC') score += 2;\n  if (item.source === 'WSJ') score += 1;\n  \n  // Recency boost (within last 6 hours)\n  const age = Date.now() - new Date(item.pubDate).getTime();\n  const hoursOld = age / (1000 * 60 * 60);\n  if (hoursOld < 2) score += 5;\n  else if (hoursOld < 6) score += 3;\n  else if (hoursOld < 24) score += 1;\n  \n  return { ...item, score };\n});\n\n// Sort by score\nscored.sort((a, b) => b.score - a.score);\n\n// Return top 5\nreturn scored.slice(0, 5);"
+        "jsCode": "// Score stories by viral potential\nconst viralKeywords = [\n  'trump', 'biden', 'war', 'crisis', 'breaking', 'scandal', 'arrest', 'death', 'attack',\n  'invasion', 'ceasefire', 'sanctions', 'inflation', 'recession', 'oil', 'gas',\n  'nato', 'ukraine', 'russia', 'china', 'iran', 'israel', 'gaza', 'middle east',\n  'election', 'vote', 'poll', 'resign', 'fired', 'impeach', 'indict', 'tariff', 'trade'\n];\n\nconst items = $input.all();\nconst scored = items.map(item => {\n  const data = item.json;\n  const titleLower = (data.title || '').toLowerCase();\n  const contentLower = (data.content || '').toLowerCase();\n  \n  let score = 0;\n  \n  // Viral keywords\n  viralKeywords.forEach(keyword => {\n    if (titleLower.includes(keyword)) score += 3;\n    if (contentLower.includes(keyword)) score += 1;\n  });\n  \n  // Recency boost (within last 6 hours)\n  const age = Date.now() - new Date(data.pubDate).getTime();\n  const hoursOld = age / (1000 * 60 * 60);\n  if (hoursOld < 2) score += 5;\n  else if (hoursOld < 6) score += 3;\n  else if (hoursOld < 24) score += 1;\n  \n  return { json: { ...data, score } };\n});\n\n// Sort by score\nscored.sort((a, b) => b.json.score - a.json.score);\n\n// Return top 3\nreturn scored.slice(0, 3);"
       },
       "name": "Score Stories",
       "type": "n8n-nodes-base.code",
@@ -95,35 +100,25 @@
     {
       "parameters": {
         "method": "POST",
-      "url": "http://render-service:3000/check-coverage",
-      "body": {
-        "link": "={{ $json.link }}",
-        "title": "={{ $json.title }}"
-      },
+        "url": "=https://render-service-production-3b75.up.railway.app/check-coverage",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ link: $json.link, title: $json.title }) }}",
         "options": {}
       },
       "name": "Check Coverage",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1100, 500],
-      "typeVersion": 4.1
+      "typeVersion": 1,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
+          "boolean": [
             {
-              "id": "c1",
-              "leftValue": "={{ $json.covered }}",
-              "rightValue": "false",
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
+              "value1": "={{ $json.covered }}",
+              "value2": false
             }
           ]
         }
@@ -131,17 +126,21 @@
       "name": "Not Covered?",
       "type": "n8n-nodes-base.if",
       "position": [1300, 500],
-      "typeVersion": 2
+      "typeVersion": 1
     },
     {
       "parameters": {
-        "workflowId": "=02 - Video Pipeline",
-        "mode": "trigger"
+        "method": "POST",
+        "url": "=https://render-service-production-3b75.up.railway.app/render",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ title: $json.title, link: $json.link, content: $json.content, source: $json.source }) }}",
+        "options": {}
       },
-      "name": "Trigger Video Pipeline",
-      "type": "n8n-nodes-base.executeWorkflow",
+      "name": "Trigger Render",
+      "type": "n8n-nodes-base.httpRequest",
       "position": [1500, 400],
-      "typeVersion": 1.1
+      "typeVersion": 1
     },
     {
       "parameters": {},
@@ -156,7 +155,7 @@
       "main": [
         [
           {
-            "node": "Reuters Feed",
+            "node": "NYT Feed",
             "type": "main",
             "index": 0
           },
@@ -183,7 +182,7 @@
         ]
       ]
     },
-    "Reuters Feed": {
+    "NYT Feed": {
       "main": [
         [
           {
@@ -275,7 +274,7 @@
       "main": [
         [
           {
-            "node": "Trigger Video Pipeline",
+            "node": "Trigger Render",
             "type": "main",
             "index": 0
           }

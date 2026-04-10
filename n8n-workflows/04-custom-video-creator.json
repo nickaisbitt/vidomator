@@ -70,7 +70,7 @@
       "name": "Generate Segments",
       "type": "n8n-nodes-base.httpRequest",
       "position": [950, 200],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -109,12 +109,12 @@
       "name": "Generate TTS",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1650, 200],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/generate-image",
+        "url": "https://render-service-production-3b75.up.railway.app/generate-image",
         "body": {
           "prompt": "={{ $json.visual }}",
           "output": "=/files/images/custom_{{ $json.videoId }}_{{ $json.segmentIndex }}.jpg",
@@ -125,7 +125,7 @@
       "name": "Generate Visual",
       "type": "n8n-nodes-base.httpRequest",
       "position": [1650, 400],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
@@ -139,7 +139,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://render-service:3000/render",
+        "url": "https://render-service-production-3b75.up.railway.app/render",
         "body": {
           "output": "={{ $json.output }}",
           "segments": "={{ $json.segments }}",
@@ -150,7 +150,7 @@
       "name": "Render Video",
       "type": "n8n-nodes-base.httpRequest",
       "position": [2050, 200],
-      "typeVersion": 4.1
+      "typeVersion": 1
     },
     {
       "parameters": {
