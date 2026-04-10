@@ -515,10 +515,8 @@ Return ONLY valid JSON (no markdown):
           ]
         }, {
           headers: {
-            'Authorization': `Bearer ${openRouterKey}`,
-            'Content-Type': 'application/json',
-            'Referer': 'https://openrouter.ai',
-            'X-Title': 'Vidomator'
+            'Authorization': `Bearer ${openRouterKey.trim()}`,
+            'Content-Type': 'application/json'
           },
           timeout: 45000
         });
