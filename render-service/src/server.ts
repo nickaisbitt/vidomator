@@ -534,10 +534,14 @@ Return ONLY valid JSON (no markdown):
         }
         logger.info('Script generated', { jobId, segments: scriptData.segments.length, title: scriptData.youtubeTitle });
 
-      } catch (llmErr) {
-        // Fallback: create a simple 2-segment script from the article title
-        logger.warn('LLM failed, using fallback script', { jobId, error: llmErr instanceof Error ? llmErr.message : String(llmErr) });
-        scriptData = {
+      } catch (error: any) {
+          const detail = error.response?.data?.error?.message || error.message;
+          console.error(`[ERRO] OpenRouter Failure: ${detail}`, { 
+            status: error.response?.status,
+            jobId 
+          });
+          console.warn(`[WARN] LLM failed, using fallback script`, { error: detail, jobId });
+          scriptData = {
           youtubeTitle: title?.substring(0, 60) || 'Breaking News Update',
           description: `Latest news from The Update Desk: ${title}`,
           tags: ['news', 'breaking', 'update desk'],

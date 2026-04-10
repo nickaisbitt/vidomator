@@ -108,53 +108,49 @@ export class VideoRenderer {
         const duration = metadata.format.duration || 10;
         const isImage = !visualPath.endsWith('.mp4') && !visualPath.endsWith('.mov');
         
-        let command = ffmpeg();
+        let command = ffmpeg()
+          .input(visualPath);
         
-        // Baseline Bulletproof Filter: Single string, no labels, high-stability components
-        const filterStr = `scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,format=yuv420p`;
-
         if (isImage) {
-          command = command.input(visualPath).loop().inputOptions(['-t', String(duration)]);
+          command = command.loop().inputOptions(['-t', String(duration)]);
         } else {
-          command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
+          command = command.inputOptions(['-stream_loop', '-1']);
         }
-        
+
         command = command.input(audioPath);
         
-        command.complexFilter([
-          {
-            filter: 'scale',
-            options: '1920:1080:force_original_aspect_ratio=increase',
-            inputs: '0:v',
-            outputs: 'v1'
-          },
-          {
-            filter: 'crop',
-            options: '1920:1080',
-            inputs: 'v1',
-            outputs: 'v2'
-          },
-          {
-            filter: 'format',
-            options: 'yuv420p',
-            inputs: 'v2',
-            outputs: 'vf'
-          }
-        ])
+        // Use high-level fluent-ffmpeg filters for 100% environment compatibility
+        command
+          .size('1920x1080')
+          .aspect('16:9')
+          .videoCodec('libx264')
+          .audioCodec('aac')
+          .audioBitrate('128k')
           .outputOptions([
-            '-map', '[vf]',
-            '-map', '1:a',
-            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
             '-preset', 'fast',
             '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '128k',
+            '-movflags', '+faststart',
             '-shortest',
             '-y'
-          ])
+          ]);
+
+        // Add a simple fade if the segment is long enough
+        if (duration > 3) {
+          command.videoFilters([
+            { filter: 'fade', options: `t=in:st=0:d=1` },
+            { filter: 'fade', options: `t=out:st=${(duration - 1).toFixed(2)}:d=1` }
+          ]);
+        }
+
+        command
           .output(output)
+          .on('start', (cmd) => console.log(`[INFO] Rendering visual segment: ${cmd}`))
           .on('end', () => resolve())
-          .on('error', reject)
+          .on('error', (err) => {
+            console.error(`[ERRO] Rendering failed for segment`, { error: err.message, visualPath });
+            reject(err);
+          })
           .run();
       });
     });
