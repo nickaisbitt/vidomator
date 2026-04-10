@@ -116,12 +116,12 @@ export class VideoRenderer {
             .loop()
             .inputOptions(['-t', String(duration)]);
           
-          // Cinematic vignette and stable resize
-          filters.push(`[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.4[v_proc]`);
+          // Ultra-stable cinematic vignette and resize
+          filters.push(`[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.4,format=yuv420p[v_proc]`);
         } else {
-          // Video input - infinite loop to patch shorter videos
+          // Video input - infinite loop
           command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
-          filters.push('[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.4[v_proc]');
+          filters.push('[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.4,format=yuv420p[v_proc]');
         }
         
         command = command.input(audioPath);
@@ -133,7 +133,7 @@ export class VideoRenderer {
           currentV = 'v_text';
         }
         
-        // Add a subtle fade in/out for smoother transitions
+        // Add a subtle fade in/out with rounded timings
         const fadeDuration = Math.min(0.8, duration / 4);
         const fadeStart = Math.max(0, duration - fadeDuration);
         filters.push(`[${currentV}]fade=t=in:st=0:d=${fadeDuration.toFixed(2)},fade=t=out:st=${fadeStart.toFixed(2)}:d=${fadeDuration.toFixed(2)}[v_faded]`);

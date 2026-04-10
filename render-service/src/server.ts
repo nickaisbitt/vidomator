@@ -517,7 +517,7 @@ Return ONLY valid JSON (no markdown):
           headers: {
             'Authorization': `Bearer ${openRouterKey}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://vidomator.up.railway.app',
+            'Referer': 'https://openrouter.ai',
             'X-Title': 'Vidomator'
           },
           timeout: 45000
