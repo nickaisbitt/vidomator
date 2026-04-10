@@ -1,7 +1,11 @@
-import ffmpeg from 'fluent-ffmpeg';
-import { Logger } from 'winston';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import ffmpeg from 'fluent-ffmpeg';
+import { Logger } from 'winston';
+
+const execAsync = promisify(exec);
 
 interface RenderOptions {
   output: string;
@@ -19,6 +23,7 @@ interface VideoSegment {
   lowerThird?: string;
   title?: string;
   duration?: number;
+  text?: string;
 }
 
 export class VideoRenderer {
@@ -46,7 +51,7 @@ export class VideoRenderer {
         onProgress?.(Math.round((i + 1) / segments.length * 80));
       }
 
-      // Phase 2: Linear Assembly - Assemble all segments + music in one robust pass (80-100%)
+      // Phase 2: Linear Assembly - Assemble all segments + music in one pass (80-100%)
       await this.assembleFinalBroadcast(processedSegments, music, musicVolume, output);
       onProgress?.(100);
       this.logger.info('Video render complete', { output });
@@ -60,10 +65,8 @@ export class VideoRenderer {
     const hasVisual = segment.visual && fs.existsSync(segment.visual);
     
     if (!hasVisual) {
-      // Audio-only segment with black background + lower third
       await this.createAudioOnlySegment(segment, output);
     } else {
-      // Process with visual
       await this.processVisualSegment(segment, output);
     }
   }
@@ -73,19 +76,13 @@ export class VideoRenderer {
       const visualPath = segment.visual!;
       const audioPath = segment.audio;
       
-      // Get audio duration
       ffmpeg.ffprobe(audioPath, (err, metadata) => {
-        if (err) {
-          reject(err);
-          return;
-        }
+        if (err) return reject(err);
         
         const duration = metadata.format.duration || 10;
         const isImage = !visualPath.endsWith('.mp4') && !visualPath.endsWith('.mov');
         
-        let command = ffmpeg()
-          .input(visualPath);
-        
+        let command = ffmpeg().input(visualPath);
         if (isImage) {
           command = command.loop().inputOptions(['-t', String(duration)]);
         } else {
@@ -94,7 +91,6 @@ export class VideoRenderer {
 
         command = command.input(audioPath);
         
-        // ABSOLUTE RECOVERY: Zero complex filters. Raw resolution and mapping only.
         command
           .size('1920x1080')
           .videoCodec('libx264')
@@ -104,9 +100,7 @@ export class VideoRenderer {
             '-preset', 'veryfast',
             '-crf', '28',
             '-y'
-          ]);
-
-        command
+          ])
           .output(output)
           .on('start', (cmd) => console.log(`[INFO] RECOVERY Rendering: ${cmd}`))
           .on('end', () => resolve())
@@ -120,7 +114,6 @@ export class VideoRenderer {
   }
 
   private async createAudioOnlySegment(segment: VideoSegment, output: string): Promise<void> {
-    // Basic black background for segments without visuals
     return new Promise((resolve, reject) => {
       ffmpeg()
         .input('color=c=black:s=1920x1080:d=10')
@@ -157,54 +150,42 @@ export class VideoRenderer {
     musicVolume: number,
     output: string
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let command = ffmpeg();
-      
-      // 1. Add all segments
-      segmentPaths.forEach(p => command = command.input(p));
-      
-      // 2. Add music if provided
-      const hasMusic = musicPath && fs.existsSync(musicPath);
-      if (hasMusic) {
-        command = command.input(musicPath!).inputOptions(['-stream_loop', '-1']);
-      }
+    const segmentCount = segmentPaths.length;
+    const hasMusic = musicPath && fs.existsSync(musicPath);
 
-      const segmentCount = segmentPaths.length;
-      
-      // 3. Build the simplest possible concat + mix filter
-      // [0:v][0:a][1:v][1:a]...concat=n=X:v=1:a=1[v][a]
-      let filter = '';
-      for (let i = 0; i < segmentCount; i++) {
-        filter += `[${i}:v][${i}:a]`;
-      }
-      filter += `concat=n=${segmentCount}:v=1:a=1[vv][aa]`;
+    // Build raw FFmpeg command string for 100% environment stability
+    let inputs = segmentPaths.map(p => `-i "${p}"`).join(' ');
+    let filter = '';
+    
+    // Concat segments
+    let concatInput = '';
+    for (let i = 0; i < segmentCount; i++) {
+        concatInput += `[${i}:v][${i}:a]`;
+    }
+    filter += `${concatInput}concat=n=${segmentCount}:v=1:a=1[vv][aa]`;
 
-      if (hasMusic) {
-        // [aa][music_input:a]amix=inputs=2:duration=first[a]
+    let mapV = '[vv]';
+    let mapA = '[aa]';
+
+    if (hasMusic) {
+        inputs += ` -stream_loop -1 -i "${musicPath}"`;
         filter += `;[${segmentCount}:a]volume=${musicVolume}[m];[aa][m]amix=inputs=2:duration=first[a]`;
-      }
+        mapA = '[a]';
+    }
 
-      command
-        .complexFilter(filter)
-        .outputOptions([
-          '-map', '[vv]',
-          '-map', hasMusic ? '[a]' : '[aa]',
-          '-c:v', 'libx264',
-          '-preset', 'fast',
-          '-crf', '23',
-          '-c:a', 'aac',
-          '-b:a', '128k',
-          '-y'
-        ])
-        .output(output)
-        .on('start', (cmd) => console.log(`[INFO] Final Assembly Started: ${cmd}`))
-        .on('end', () => resolve())
-        .on('error', (err) => {
-          console.error(`[ERRO] Final Assembly Failed`, { error: err.message });
-          reject(err);
-        })
-        .run();
-    });
+    const command = `ffmpeg ${inputs} -filter_complex "${filter}" -map "${mapV}" -map "${mapA}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -y "${output}"`;
+
+    console.log(`[INFO] EXEC Final Assembly: ${command}`);
+    
+    try {
+        const { stderr } = await execAsync(command);
+        if (stderr && stderr.includes('Error') && !stderr.includes('swscaler')) {
+            console.warn(`[WARN] FFmpeg STDERR: ${stderr}`);
+        }
+    } catch (err: any) {
+        console.error(`[ERRO] FFmpeg EXEC failed`, { error: err.message, stderr: err.stderr });
+        throw err;
+    }
   }
 
   private async finalEncode(input: string, output: string): Promise<void> {

@@ -14,7 +14,7 @@ import dotenv from 'dotenv';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
-const execPromise = promisify(exec);
+const execAsync = promisify(exec);
 
 dotenv.config();
 
