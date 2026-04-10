@@ -11,6 +11,10 @@ import { google } from 'googleapis';
 import { ThumbnailGenerator } from './templates/thumbnails';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
 
 dotenv.config();
 
@@ -512,9 +516,11 @@ Return ONLY valid JSON (no markdown):
         }, {
           headers: {
             'Authorization': `Bearer ${openRouterKey}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://vidomator.up.railway.app',
+            'X-Title': 'Vidomator'
           },
-          timeout: 30000
+          timeout: 45000
         });
 
         const rawContent = llmResponse.data?.choices?.[0]?.message?.content || '';
@@ -565,23 +571,51 @@ Return ONLY valid JSON (no markdown):
       fs.mkdirSync(videoDir, { recursive: true });
       fs.mkdirSync(outputDir, { recursive: true });
 
-      const googleTTS = require('google-tts-api');
+      const speechifyKey = process.env.SPEECHIFY_API_KEY;
 
       for (let i = 0; i < scriptData.segments.length; i++) {
         const seg = scriptData.segments[i];
         const audioPath = path.join(audioDir, `${videoId}_${i}.mp3`);
 
         try {
-          const results = await googleTTS.getAllAudioBase64(seg.script, {
-            lang: 'en',
-            slow: false,
-            host: 'https://translate.google.com',
-            timeout: 10000,
-          });
-          const audioBuffer = Buffer.concat(
-            results.map((r: any) => Buffer.from(r.base64, 'base64'))
-          );
-          fs.writeFileSync(audioPath, audioBuffer);
+          if (speechifyKey) {
+            logger.info(`Using Speechify for segment ${i}`, { jobId });
+            const speechifyResponse = await axios.post(
+              'https://api.speechify.ai/v1/audio/stream',
+              {
+                input: seg.script,
+                voice_id: 'nick',
+                model: 'simba-english',
+                audio_format: 'mp3',
+                options: {
+                  text_normalization: false,
+                  loudness_normalization: true
+                }
+              },
+              {
+                headers: {
+                  'Authorization': `Bearer ${speechifyKey}`,
+                  'Content-Type': 'application/json'
+                },
+                responseType: 'arraybuffer',
+                timeout: 30000
+              }
+            );
+            fs.writeFileSync(audioPath, Buffer.from(speechifyResponse.data));
+          } else {
+            // Fallback to Google TTS
+            const googleTTS = require('google-tts-api');
+            const results = await googleTTS.getAllAudioBase64(seg.script, {
+              lang: 'en',
+              slow: false,
+              host: 'https://translate.google.com',
+              timeout: 10000,
+            });
+            const audioBuffer = Buffer.concat(
+              results.map((r: any) => Buffer.from(r.base64, 'base64'))
+            );
+            fs.writeFileSync(audioPath, audioBuffer);
+          }
           seg._audioPath = audioPath;
           logger.info(`TTS segment ${i} done`, { jobId, chars: seg.script.length });
         } catch (ttsErr) {
@@ -634,6 +668,18 @@ Return ONLY valid JSON (no markdown):
       logger.info('Step 4: Rendering video', { jobId });
       const outputPath = path.join(outputDir, `${videoId}.mp4`);
 
+      // Pick random background music from library
+      const musicDir = path.join(filesBasePath, 'audio', 'music');
+      let selectedMusic: string | undefined;
+      try {
+        if (fs.existsSync(musicDir)) {
+          const songs = fs.readdirSync(musicDir).filter(f => f.endsWith('.mp3'));
+          if (songs.length > 0) {
+            selectedMusic = path.join(musicDir, songs[Math.floor(Math.random() * songs.length)]);
+          }
+        }
+      } catch (e) {}
+
       const renderSegments = scriptData.segments
         .filter((seg: any) => seg._audioPath) // Only segments with audio
         .map((seg: any) => ({
@@ -652,6 +698,8 @@ Return ONLY valid JSON (no markdown):
       await renderer.render({
         output: outputPath,
         segments: renderSegments,
+        music: selectedMusic,
+        musicVolume: 0.12,
         onProgress: (p: number) => {
           job.progress = 60 + Math.round(p * 0.3); // 60-90%
           job.updatedAt = new Date();
@@ -734,6 +782,31 @@ Return ONLY valid JSON (no markdown):
   })();
 });
 
+//Helper to ensure background music library exists
+async function ensureMusicLibrary() {
+  const filesBasePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
+  const musicDir = path.join(filesBasePath, 'audio', 'music');
+  fs.mkdirSync(musicDir, { recursive: true });
+
+  const tracks = [
+    { name: 'news_urgent.mp3', url: 'https://www.soundimage.org/wp-content/uploads/2016/10/Global-News-Reporting.mp3' },
+    { name: 'news_tech.mp3', url: 'https://www.soundimage.org/wp-content/uploads/2015/06/High-Tech-News.mp3' },
+    { name: 'news_corporate.mp3', url: 'https://www.soundimage.org/wp-content/uploads/2014/09/Information-Grid.mp3' }
+  ];
+
+  for (const track of tracks) {
+    const trackPath = path.join(musicDir, track.name);
+    if (!fs.existsSync(trackPath)) {
+      try {
+        logger.info(`Downloading music asset: ${track.name}`);
+        await execPromise(`wget -q -O "${trackPath}" "${track.url}"`);
+      } catch (err) {
+        logger.warn(`Failed to download music track ${track.name}`, { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+}
+
 // Cleanup old jobs (keep last 100)
 setInterval(() => {
   if (jobs.size > 100) {
@@ -746,6 +819,7 @@ setInterval(() => {
 
 app.listen(PORT as number, '0.0.0.0', () => {
    logger.info('Vidomator Render Service started', { port: PORT });
+   ensureMusicLibrary().catch(e => logger.error('Music library check failed', { error: e.message }));
 });
 } catch (err) {
   console.error("FATAL ERROR ON STARTUP:", err);

@@ -115,18 +115,17 @@ export class VideoRenderer {
           command = command.input(visualPath)
             .loop()
             .inputOptions(['-t', String(duration)]);
+          
+          // Cinematic Ken Burns Zoom effect for images
+          filters.push(`[0:v]scale=8000:-1,zoompan=z='min(zoom+0.0015,1.5)':d=${Math.ceil(duration * 25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080,setsar=1[v_animated]`);
+          filters.push(`[v_animated]scale=1920:1080,boxblur=20:20[bg];[v_animated]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]`);
         } else {
           // Video input - infinite loop to patch shorter videos
           command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
+          filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]');
         }
         
         command = command.input(audioPath);
-        
-        // Build filter complex
-        const filters: string[] = [];
-        
-        // Scale to 1920x1080 with premium cinematic blurred background
-        filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]');
         
         // Add lower third if specified
         if (segment.lowerThird) {
@@ -134,9 +133,12 @@ export class VideoRenderer {
           filters.push(`[v]${lowerThirdFilter}[v]`);
         }
         
+        // Add a subtle fade in/out for smoother transitions
+        filters.push(`[v]fade=t=in:st=0:d=1,fade=t=out:st=${duration - 1}:d=1[v_faded]`);
+        
         command.complexFilter(filters)
           .outputOptions([
-            '-map', '[v]',
+            '-map', '[v_faded]',
             '-map', '1:a',
             '-c:v', 'libx264',
             '-preset', 'fast',
