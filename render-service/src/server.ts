@@ -485,7 +485,11 @@ app.post('/auto-produce', async (req, res) => {
         openRouterKey = openRouterKey.trim().replace(/[\r\n]/g, '');
         
         // AUTH PROBE: Log safe diagnostic info
-        console.log(`[INFO] AI Key Probe: Length=${openRouterKey.length}, Prefix=${openRouterKey.substring(0, 10)}...`);
+        if (openRouterKey) {
+            console.log(`[INFO] AI Key Probe: Length=${openRouterKey.length}, Prefix=${openRouterKey.substring(0, 10)}...`);
+        } else {
+            console.warn(`[WARN] AI Key Probe: OPENROUTER_API_KEY is missing!`);
+        }
 
         const response = await axios.post(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -683,22 +687,22 @@ app.post('/auto-produce', async (req, res) => {
 
       const renderSegments = scriptData.segments
         .filter((seg: any) => seg._audioPath) // Only segments with audio
-        .map((seg: any) => ({
-          type: seg.type || 'content',
-          audio: seg._audioPath,
-          visual: seg._visualPath || undefined,
-          lowerThird: seg.lowerThird,
-          title: seg.type === 'intro' ? scriptData.youtubeTitle : undefined
-        }));
-
-      if (renderSegments.length === 0) {
-        throw new Error('No renderable segments (all TTS failed)');
+      const renderSegments = (scriptData.segments || []).filter((s: any) => s._audioPath && s._visualPath);
+      
+      if (!renderSegments || renderSegments.length === 0) {
+        throw new Error("No renderable segments (all TTS or visual steps failed)");
       }
 
       const renderer = new VideoRenderer(logger);
       await renderer.render({
         output: outputPath,
-        segments: renderSegments,
+        segments: renderSegments.map((seg: any) => ({
+          type: seg.type || 'content',
+          audio: seg._audioPath,
+          visual: seg._visualPath || undefined,
+          lowerThird: seg.lowerThird,
+          title: seg.type === 'intro' ? (scriptData.youtubeTitle || title) : undefined
+        })),
         music: selectedMusic,
         musicVolume: 0.12,
         onProgress: (p: number) => {
