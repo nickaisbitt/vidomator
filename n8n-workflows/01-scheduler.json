@@ -131,7 +131,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://render-service-production-3b75.up.railway.app/render",
+        "url": "=https://render-service-production-3b75.up.railway.app/auto-produce",
         "sendBody": true,
         "contentType": "json",
         "body": "={{ JSON.stringify({ title: $json.title, link: $json.link, content: $json.content, source: $json.source }) }}",

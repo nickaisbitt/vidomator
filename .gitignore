@@ -41,3 +41,9 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Secret files
+exchange-token.js
+n8n-uploader.js
+render-service/exchange-token.js
+scripts/exchange-token.js

@@ -9,6 +9,7 @@ import { VideoRenderer } from './ffmpeg';
 import { VisualFetcher } from './visuals';
 import { google } from 'googleapis';
 import { ThumbnailGenerator } from './templates/thumbnails';
+import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -437,6 +438,294 @@ app.post('/publish-to-youtube', async (req, res) => {
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+});
+
+// ==============================
+// SELF-CONTAINED AUTO-PRODUCE
+// Full pipeline: article → script → TTS → visuals → render → YouTube
+// ==============================
+app.post('/auto-produce', async (req, res) => {
+  const jobId = uuidv4();
+  const job: JobStatus = {
+    id: jobId,
+    status: 'pending',
+    progress: 0,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  jobs.set(jobId, job);
+
+  // Return immediately so the caller doesn't time out
+  res.json({ jobId, status: 'queued', message: 'Auto-produce pipeline started' });
+
+  // Run the entire pipeline asynchronously
+  (async () => {
+    try {
+      job.status = 'processing';
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      const { title, link, content, source } = req.body;
+      const filesBasePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
+      const videoId = `auto_${Date.now()}`;
+
+      logger.info('Auto-produce started', { jobId, title, source });
+
+      // ---- STEP 1: Generate script via OpenRouter ----
+      logger.info('Step 1: Generating script via OpenRouter', { jobId });
+      let scriptData: any;
+      try {
+        const openRouterKey = process.env.OPENROUTER_API_KEY;
+        if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not set');
+
+        const llmResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+          model: 'google/gemini-2.0-flash-exp:free',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a professional news script writer for 'The Update Desk' YouTube channel. Write engaging, factual news scripts. ALWAYS respond with valid JSON only, no markdown fences.`
+            },
+            {
+              role: 'user',
+              content: `Write a 2-3 minute news script based on this article:
+
+Title: ${title}
+Source: ${source || 'Unknown'}
+Content: ${(content || '').substring(0, 3000)}
+
+Return ONLY valid JSON (no markdown):
+{
+  "youtubeTitle": "Catchy title under 60 chars",
+  "description": "YouTube description",
+  "tags": ["tag1", "tag2"],
+  "segments": [
+    {
+      "type": "intro",
+      "script": "Spoken text for this segment...",
+      "visualQuery": "search query for stock video",
+      "lowerThird": "LOWER THIRD TEXT"
+    }
+  ]
+}`
+            }
+          ]
+        }, {
+          headers: {
+            'Authorization': `Bearer ${openRouterKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        });
+
+        const rawContent = llmResponse.data?.choices?.[0]?.message?.content || '';
+        // Strip markdown fences if present
+        const cleaned = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        scriptData = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+
+        if (!scriptData.segments || scriptData.segments.length === 0) {
+          throw new Error('No segments in LLM response');
+        }
+        logger.info('Script generated', { jobId, segments: scriptData.segments.length, title: scriptData.youtubeTitle });
+
+      } catch (llmErr) {
+        // Fallback: create a simple 2-segment script from the article title
+        logger.warn('LLM failed, using fallback script', { jobId, error: llmErr instanceof Error ? llmErr.message : String(llmErr) });
+        scriptData = {
+          youtubeTitle: title?.substring(0, 60) || 'Breaking News Update',
+          description: `Latest news from The Update Desk: ${title}`,
+          tags: ['news', 'breaking', 'update desk'],
+          segments: [
+            {
+              type: 'intro',
+              script: `Welcome to The Update Desk. Today we're covering a major story: ${title}.`,
+              visualQuery: 'news studio broadcast',
+              lowerThird: 'THE UPDATE DESK'
+            },
+            {
+              type: 'content',
+              script: (content || 'Details are still emerging on this developing story.').substring(0, 500),
+              visualQuery: title?.split(' ').slice(0, 3).join(' ') || 'world news',
+              lowerThird: title?.substring(0, 40) || 'BREAKING NEWS'
+            }
+          ]
+        };
+      }
+
+      job.progress = 20;
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      // ---- STEP 2: Generate TTS for each segment ----
+      logger.info('Step 2: Generating TTS', { jobId, segmentCount: scriptData.segments.length });
+      const audioDir = path.join(filesBasePath, 'audio');
+      const videoDir = path.join(filesBasePath, 'video');
+      const outputDir = path.join(filesBasePath, 'output');
+      fs.mkdirSync(audioDir, { recursive: true });
+      fs.mkdirSync(videoDir, { recursive: true });
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      const googleTTS = require('google-tts-api');
+
+      for (let i = 0; i < scriptData.segments.length; i++) {
+        const seg = scriptData.segments[i];
+        const audioPath = path.join(audioDir, `${videoId}_${i}.mp3`);
+
+        try {
+          const results = await googleTTS.getAllAudioBase64(seg.script, {
+            lang: 'en',
+            slow: false,
+            host: 'https://translate.google.com',
+            timeout: 10000,
+          });
+          const audioBuffer = Buffer.concat(
+            results.map((r: any) => Buffer.from(r.base64, 'base64'))
+          );
+          fs.writeFileSync(audioPath, audioBuffer);
+          seg._audioPath = audioPath;
+          logger.info(`TTS segment ${i} done`, { jobId, chars: seg.script.length });
+        } catch (ttsErr) {
+          logger.error(`TTS segment ${i} failed`, { jobId, error: ttsErr instanceof Error ? ttsErr.message : String(ttsErr) });
+          // Write a short silence file as fallback
+          seg._audioPath = null;
+        }
+      }
+
+      job.progress = 40;
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      // ---- STEP 3: Fetch visuals for each segment ----
+      logger.info('Step 3: Fetching visuals', { jobId });
+      const fetcher = new VisualFetcher(logger);
+
+      for (let i = 0; i < scriptData.segments.length; i++) {
+        const seg = scriptData.segments[i];
+        const visualPath = path.join(videoDir, `${videoId}_${i}.mp4`);
+
+        try {
+          // Try Pexels first, then Pixabay, then web
+          let result = await fetcher.fromPexels(seg.visualQuery || 'news', visualPath);
+          if (!result.success) {
+            result = await fetcher.fromPixabay(seg.visualQuery || 'news', visualPath);
+          }
+          if (!result.success) {
+            result = await fetcher.fromWeb(seg.visualQuery || 'news', visualPath);
+          }
+          seg._visualPath = result.success ? visualPath : null;
+          logger.info(`Visual segment ${i} done`, { jobId, success: result.success });
+        } catch (vizErr) {
+          logger.error(`Visual segment ${i} failed`, { jobId, error: vizErr instanceof Error ? vizErr.message : String(vizErr) });
+          seg._visualPath = null;
+        }
+      }
+
+      job.progress = 60;
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      // ---- STEP 4: Render video via FFmpeg ----
+      logger.info('Step 4: Rendering video', { jobId });
+      const outputPath = path.join(outputDir, `${videoId}.mp4`);
+
+      const renderSegments = scriptData.segments
+        .filter((seg: any) => seg._audioPath) // Only segments with audio
+        .map((seg: any) => ({
+          type: seg.type || 'content',
+          audio: seg._audioPath,
+          visual: seg._visualPath || undefined,
+          lowerThird: seg.lowerThird,
+          title: seg.type === 'intro' ? scriptData.youtubeTitle : undefined
+        }));
+
+      if (renderSegments.length === 0) {
+        throw new Error('No renderable segments (all TTS failed)');
+      }
+
+      const renderer = new VideoRenderer(logger);
+      await renderer.render({
+        output: outputPath,
+        segments: renderSegments,
+        onProgress: (p: number) => {
+          job.progress = 60 + Math.round(p * 0.3); // 60-90%
+          job.updatedAt = new Date();
+          jobs.set(jobId, job);
+        }
+      });
+
+      job.progress = 90;
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      // ---- STEP 5: Upload to YouTube ----
+      logger.info('Step 5: Uploading to YouTube', { jobId, outputPath });
+      const { YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN } = process.env;
+
+      if (YOUTUBE_CLIENT_ID && YOUTUBE_CLIENT_SECRET && YOUTUBE_REFRESH_TOKEN && fs.existsSync(outputPath)) {
+        try {
+          const oauth2Client = new google.auth.OAuth2(
+            YOUTUBE_CLIENT_ID,
+            YOUTUBE_CLIENT_SECRET,
+            'http://localhost:3000/oauth2callback'
+          );
+          oauth2Client.setCredentials({ refresh_token: YOUTUBE_REFRESH_TOKEN });
+
+          const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+
+          const uploadResult = await youtube.videos.insert({
+            part: ['snippet', 'status'],
+            requestBody: {
+              snippet: {
+                title: scriptData.youtubeTitle || title,
+                description: scriptData.description || `News coverage: ${title}`,
+                tags: scriptData.tags || ['news'],
+                categoryId: '25'
+              },
+              status: {
+                privacyStatus: 'public'
+              }
+            },
+            media: {
+              body: fs.createReadStream(outputPath)
+            }
+          });
+
+          logger.info('YouTube upload successful!', { jobId, youtubeVideoId: uploadResult.data.id });
+
+          // Log to published list for dedup
+          const published = readPublishedVideos();
+          published.unshift({
+            videoId,
+            youtubeVideoId: uploadResult.data.id || undefined,
+            title: scriptData.youtubeTitle || title,
+            publishedAt: new Date().toISOString(),
+            articleUrl: link
+          });
+          writePublishedVideos(published.slice(0, 500));
+
+        } catch (ytErr) {
+          logger.error('YouTube upload failed', { jobId, error: ytErr instanceof Error ? ytErr.message : String(ytErr) });
+        }
+      } else {
+        logger.warn('YouTube credentials missing or video file missing, skipping upload', { jobId });
+      }
+
+      job.status = 'complete';
+      job.progress = 100;
+      job.output = outputPath;
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+
+      logger.info('Auto-produce pipeline complete!', { jobId, title: scriptData.youtubeTitle });
+
+    } catch (error) {
+      job.status = 'failed';
+      job.error = error instanceof Error ? error.message : 'Unknown error';
+      job.updatedAt = new Date();
+      jobs.set(jobId, job);
+      logger.error('Auto-produce pipeline failed', { jobId, error: error instanceof Error ? error.message : String(error) });
+    }
+  })();
 });
 
 // Cleanup old jobs (keep last 100)
