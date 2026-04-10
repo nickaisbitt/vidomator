@@ -109,7 +109,9 @@ export class VideoRenderer {
         const isImage = !visualPath.endsWith('.mp4') && !visualPath.endsWith('.mov');
         
         let command = ffmpeg();
+        const filters: string[] = [];
         let currentV = 'v_proc';
+
         if (isImage) {
           // Image input - loop for duration
           command = command.input(visualPath)
