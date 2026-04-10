@@ -1,3 +1,4 @@
+console.log("=== STARTING RENDER SERVICE BOOT ===");
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -294,6 +295,6 @@ setInterval(() => {
   }
 }, 60000); // Every minute
 
-app.listen(PORT, () => {
+app.listen(PORT as number, '0.0.0.0', () => {
    logger.info('Vidomator Render Service started', { port: PORT });
 });
