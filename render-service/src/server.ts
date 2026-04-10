@@ -624,10 +624,13 @@ app.post('/auto-produce', async (req, res) => {
             fs.writeFileSync(audioPath, audioBuffer);
           }
           seg._audioPath = audioPath;
-          logger.info(`TTS segment ${i} done`, { jobId, chars: sanitizedText.length });
-        } catch (ttsErr) {
-          logger.error(`TTS segment ${i} failed`, { jobId, error: ttsErr instanceof Error ? ttsErr.message : String(ttsErr) });
-          // Write a short silence file as fallback
+          logger.info(`TTS segment ${i} done`, { jobId, chars: (sanitizedText || '').length });
+        } catch (ttsErr: any) {
+          logger.error(`TTS segment ${i} failed`, { 
+            jobId, 
+            error: ttsErr.message, 
+            stack: ttsErr.stack // DEFINITIVE DIAGNOSIS: Reveal the hidden file/line
+          });
           seg._audioPath = null;
         }
       }
