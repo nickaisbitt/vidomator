@@ -1,3 +1,4 @@
+console.log("!!! VIDOMATOR NUCLEUS PROBE ACTIVE !!!");
 console.log("=== STARTING RENDER SERVICE BOOT ===");
 import express from 'express';
 import cors from 'cors';
