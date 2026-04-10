@@ -117,14 +117,14 @@ export class VideoRenderer {
             .loop()
             .inputOptions(['-t', String(duration)]);
           
-          // Use a robust cinematic color grade and vignette instead of zoompan
-          filters.push(`[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.5,curves=preset=vintage[v_animated]`);
-          filters.push(`[v_animated]scale=1920:1080,boxblur=20:20[bg];[v_animated]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]`);
+          // Use a robust cinematic vignette + split for layering
+          filters.push(`[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.5,split=2[v_orig1][v_orig2]`);
+          filters.push(`[v_orig1]scale=1920:1080,boxblur=20:20[bg];[v_orig2]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]`);
           currentV = 'v_layered';
         } else {
           // Video input - infinite loop to patch shorter videos
           command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
-          filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]');
+          filters.push('[0:v]split=2[v_orig1][v_orig2];[v_orig1]scale=1920:1080,boxblur=20:20[bg];[v_orig2]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]');
           currentV = 'v_layered';
         }
         
@@ -138,7 +138,7 @@ export class VideoRenderer {
         }
         
         // Add a subtle fade in/out for smoother transitions
-        const fadeDuration = Math.min(1, duration / 4);
+        const fadeDuration = Math.min(0.5, duration / 4);
         const fadeStart = Math.max(0, duration - fadeDuration);
         filters.push(`[${currentV}]fade=t=in:st=0:d=${fadeDuration},fade=t=out:st=${fadeStart}:d=${fadeDuration}[v_faded]`);
         
