@@ -12,9 +12,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const filesBasePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
-const logsDir = path.join(filesBasePath, 'logs');
-fs.mkdirSync(logsDir, { recursive: true });
+try {
+  const filesBasePath = process.env.FILES_BASE_PATH || (process.env.NODE_ENV === 'production' ? '/files' : './files');
+  const logsDir = path.join(filesBasePath, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
 
 const publishLogPath = path.join(logsDir, 'published.json');
 
@@ -255,7 +256,17 @@ app.post('/generate-image', async (req, res) => {
     const { prompt, output, model = 'black-forest-labs/flux.2-klein-4b', aspectRatio = '16:9' } = req.body;
     
     const fetcher = new VisualFetcher(logger);
-    const result = await fetcher.generateImage(prompt, output, model, aspectRatio);
+    let result = await fetcher.generateImage(prompt, output, model, aspectRatio);
+    
+    if (!result.success) {
+      logger.warn('OpenRouter image generation failed, falling back to Web image search', { error: result.error, prompt });
+      result = await fetcher.fromWeb(prompt, output);
+    }
+    
+    if (!result.success) {
+      logger.warn('Web search image fallback failed, falling back to Pixabay', { error: result.error, prompt });
+      result = await fetcher.fromPixabay(prompt, output);
+    }
     
     res.json(result);
   } catch (error) {
@@ -298,3 +309,7 @@ setInterval(() => {
 app.listen(PORT as number, '0.0.0.0', () => {
    logger.info('Vidomator Render Service started', { port: PORT });
 });
+} catch (err) {
+  console.error("FATAL ERROR ON STARTUP:", err);
+  process.exit(1);
+}
