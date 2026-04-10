@@ -97,11 +97,11 @@ async function getRefreshToken() {
       console.log('⏳ Waiting for authorization...');
     });
 
-    // Timeout after 2 minutes
+    // Timeout after 15 minutes
     setTimeout(() => {
       server.close();
       reject(new Error('Timeout: Authorization took too long'));
-    }, 120000);
+    }, 900000);
   });
 }
 

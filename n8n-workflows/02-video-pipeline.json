@@ -37,18 +37,15 @@
     },
     {
       "parameters": {
-        "model": "google/gemini-2.0-flash-exp:free",
-        "options": {}
-      },
-      "name": "Generate Script",
-      "type": "n8n-nodes-base.lmChatOpenAi",
-      "position": [850, 300],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "messages": {
-          "message": [
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "google/gemini-2.0-flash-exp:free",
+          "messages": [
             {
               "role": "system",
               "content": "You are a professional news script writer for 'The Update Desk' YouTube channel. Write engaging, factual news scripts in a broadcast news style."
@@ -61,10 +58,10 @@
         },
         "options": {}
       },
-      "name": "LLM Script Prompt",
-      "type": "n8n-nodes-base.openAiFunction",
-      "position": [1050, 300],
-      "typeVersion": 1.2
+      "name": "Generate Script",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [950, 300],
+      "typeVersion": 4.1
     },
     {
       "parameters": {
@@ -280,17 +277,6 @@
       ]
     },
     "Generate Script": {
-      "main": [
-        [
-          {
-            "node": "LLM Script Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LLM Script Prompt": {
       "main": [
         [
           {

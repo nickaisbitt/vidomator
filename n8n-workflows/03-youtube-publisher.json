@@ -19,46 +19,38 @@
     },
     {
       "parameters": {
-        "operation": "upload",
-        "title": "={{ $json.title }}",
-        "description": "={{ $json.description }}",
-        "options": {
-          "categoryId": "={{ $json.categoryId }}",
-          "tags": "={{ $json.tags.join(',') }}",
-          "privacyStatus": "public"
-        }
+        "method": "POST",
+        "url": "http://render-service:3000/publish-to-youtube",
+        "body": {
+          "videoPath": "={{ $json.videoPath }}",
+          "title": "={{ $json.title }}",
+          "description": "={{ $json.description }}",
+          "tags": "={{ $json.tags }}",
+          "categoryId": "={{ $json.categoryId }}"
+        },
+        "options": {}
       },
       "name": "YouTube Upload",
-      "type": "n8n-nodes-base.youTube",
+      "type": "n8n-nodes-base.httpRequest",
       "position": [650, 300],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "videoId": "={{ $json.id }}",
-        "binaryPropertyName": "data"
-      },
-      "name": "Upload Thumbnail",
-      "type": "n8n-nodes-base.youTube",
-      "position": [850, 300],
-      "typeVersion": 1
+      "typeVersion": 4.1
     },
     {
       "parameters": {
         "method": "POST",
         "url": "http://render-service:3000/log-publish",
         "body": {
-          "videoId": "={{ $json.videoId }}",
-          "youtubeVideoId": "={{ $json.id }}",
-          "title": "={{ $json.title }}",
+          "videoId": "={{ $('Prepare Upload').item.json.videoId }}",
+          "youtubeVideoId": "={{ $json.data.id }}",
+          "title": "={{ $('Prepare Upload').item.json.title }}",
           "publishedAt": "={{ new Date().toISOString() }}",
-          "articleUrl": "={{ $json.articleUrl }}"
+          "articleUrl": "={{ $('Prepare Upload').item.json.articleUrl }}"
         },
         "options": {}
       },
       "name": "Log to Database",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [1050, 300],
+      "position": [850, 300],
       "typeVersion": 4.1
     },
     {
@@ -93,17 +85,6 @@
       ]
     },
     "YouTube Upload": {
-      "main": [
-        [
-          {
-            "node": "Upload Thumbnail",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upload Thumbnail": {
       "main": [
         [
           {

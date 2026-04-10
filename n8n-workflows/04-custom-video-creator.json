@@ -46,34 +46,31 @@
     },
     {
       "parameters": {
-        "model": "google/gemini-2.0-flash-exp:free",
-        "options": {}
-      },
-      "name": "Generate Segments",
-      "type": "n8n-nodes-base.lmChatOpenAi",
-      "position": [850, 200],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
-        "messages": {
-          "message": [
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "google/gemini-2.0-flash-exp:free",
+          "messages": [
             {
               "role": "system",
-              "content": "You are a video production assistant. Break down the provided script into segments for video production."
+              "content": "You are a video production assistant. Break down the provided script into segments for video production. Return JSON format with segments array."
             },
             {
               "role": "user",
-              "content": "=Break this script into video segments:\n\nTitle: {{ $json.title }}\nScript: {{ $json.script }}\n\nCreate 4-6 segments with:\n- Type (intro, content, conclusion)\n- Script portion\n- Visual suggestion (stock video, AI image, web image, or text card)\n- Lower third text\n\nReturn JSON format with segments array."
+              "content": "=Break this script into video segments:\n\nTitle: {{ $json.title }}\nScript: {{ $json.script }}\n\nCreate 4-6 segments with:\n- Type (intro, content, conclusion)\n- Script portion\n- Visual suggestion (stock video, AI image, web image, or text card)\n- Lower third text"
             }
           ]
         },
         "options": {}
       },
-      "name": "LLM Segment Prompt",
-      "type": "n8n-nodes-base.openAiFunction",
-      "position": [1050, 200],
-      "typeVersion": 1.2
+      "name": "Generate Segments",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [950, 200],
+      "typeVersion": 4.1
     },
     {
       "parameters": {
@@ -226,17 +223,6 @@
       ]
     },
     "Generate Segments": {
-      "main": [
-        [
-          {
-            "node": "LLM Segment Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "LLM Segment Prompt": {
       "main": [
         [
           {

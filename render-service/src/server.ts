@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import winston from 'winston';
 import { VideoRenderer } from './ffmpeg';
 import { VisualFetcher } from './visuals';
+import { google } from 'googleapis';
 import { ThumbnailGenerator } from './templates/thumbnails';
 import dotenv from 'dotenv';
 
@@ -371,6 +372,68 @@ app.post('/generate-free-tts', async (req, res) => {
      logger.error('Failed to generate Free TTS', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({
       error: 'Failed to generate Free TTS',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Native YouTube Uploader bypass
+app.post('/publish-to-youtube', async (req, res) => {
+  try {
+    const { videoPath, title, description, tags = [], categoryId = '25' } = req.body;
+    
+    if (!videoPath || !fs.existsSync(videoPath)) {
+      return res.status(400).json({ error: 'Video file not found', videoPath });
+    }
+
+    const { YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN } = process.env;
+    
+    if (!YOUTUBE_CLIENT_ID || !YOUTUBE_CLIENT_SECRET || !YOUTUBE_REFRESH_TOKEN) {
+      return res.status(500).json({ error: 'YouTube API credentials missing from environment' });
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      YOUTUBE_CLIENT_ID,
+      YOUTUBE_CLIENT_SECRET,
+      'http://localhost:3000/oauth2callback' // Native redirect block
+    );
+
+    oauth2Client.setCredentials({
+      refresh_token: YOUTUBE_REFRESH_TOKEN
+    });
+
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: oauth2Client
+    });
+
+    logger.info('Starting YouTube upload protocol natively', { videoPath, title });
+
+    const reqData = await youtube.videos.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title,
+          description,
+          tags,
+          categoryId
+        },
+        status: {
+          privacyStatus: 'public'
+        }
+      },
+      media: {
+        body: fs.createReadStream(videoPath)
+      }
+    });
+
+    logger.info('YouTube upload successful!', { videoId: reqData.data.id });
+    res.json({ success: true, videoId: reqData.data.id, data: reqData.data });
+    
+  } catch (error) {
+    logger.error('Failed to upload to YouTube natively', { error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({
+      error: 'Failed to upload to YouTube',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
