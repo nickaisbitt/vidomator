@@ -483,7 +483,7 @@ app.post('/auto-produce', async (req, res) => {
         if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not set');
 
         const llmResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-          model: 'meta-llama/llama-3.1-8b-instruct:free',
+          model: 'google/gemini-2.0-flash-exp:free',
           messages: [
             {
               role: 'system',
