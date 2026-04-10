@@ -797,7 +797,7 @@ async function ensureMusicLibrary() {
     if (!fs.existsSync(trackPath)) {
       try {
         logger.info(`Downloading music asset: ${track.name}`);
-        await execPromise(`wget -q -O "${trackPath}" "${track.url}"`);
+        await execAsync(`wget -q -O "${trackPath}" "${track.url}"`);
       } catch (err) {
         logger.warn(`Failed to download music track ${track.name}`, { error: err instanceof Error ? err.message : String(err) });
       }
