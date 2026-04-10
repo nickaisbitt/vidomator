@@ -566,7 +566,8 @@ app.post('/auto-produce', async (req, res) => {
       jobs.set(jobId, job);
 
       // ---- STEP 2: Generate TTS for each segment ----
-      logger.info('Step 2: Generating TTS', { jobId, segmentCount: scriptData.segments.length });
+      const segments = scriptData?.segments || [];
+      logger.info('Step 2: Generating TTS', { jobId, segmentCount: segments.length });
       const audioDir = path.join(filesBasePath, 'audio');
       const videoDir = path.join(filesBasePath, 'video');
       const outputDir = path.join(filesBasePath, 'output');
@@ -638,8 +639,9 @@ app.post('/auto-produce', async (req, res) => {
       // ---- STEP 3: Fetch visuals for each segment ----
       logger.info('Step 3: Fetching visuals', { jobId });
       const fetcher = new VisualFetcher(logger);
+      const visualsCount = (scriptData?.segments || []).length;
 
-      for (let i = 0; i < scriptData.segments.length; i++) {
+      for (let i = 0; i < visualsCount; i++) {
         const seg = scriptData.segments[i];
 
         try {
