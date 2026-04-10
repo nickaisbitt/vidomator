@@ -14,19 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Switch back to the non-root pptruser provided by the base image
-USER pptruser
-
 WORKDIR /app
 
 # Copy package files
-COPY --chown=pptruser:pptruser package*.json ./
+COPY package*.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy the rest of the application
-COPY --chown=pptruser:pptruser . .
+COPY . .
 
 # Build TypeScript
 RUN npm run build
