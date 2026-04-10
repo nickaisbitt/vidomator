@@ -601,19 +601,25 @@ Return ONLY valid JSON (no markdown):
 
       for (let i = 0; i < scriptData.segments.length; i++) {
         const seg = scriptData.segments[i];
-        const visualPath = path.join(videoDir, `${videoId}_${i}.mp4`);
 
         try {
-          // Try Pexels first, then Pixabay, then web
-          let result = await fetcher.fromPexels(seg.visualQuery || 'news', visualPath);
-          if (!result.success) {
-            result = await fetcher.fromPixabay(seg.visualQuery || 'news', visualPath);
+          // 1. Harvest from the web first for dynamic fair use images (highly specific to actual news event)
+          const webVisualPath = path.join(videoDir, `${videoId}_${i}.jpg`);
+          let result = await fetcher.fromWeb(seg.visualQuery || 'news', webVisualPath);
+          
+          if (result.success) {
+            seg._visualPath = webVisualPath;
+          } else {
+            // 2. Fallback to generic stock footage if crawling fails
+            const stockVisualPath = path.join(videoDir, `${videoId}_${i}.mp4`);
+            result = await fetcher.fromPexels(seg.visualQuery || 'news', stockVisualPath);
+            if (!result.success) {
+              result = await fetcher.fromPixabay(seg.visualQuery || 'news', stockVisualPath);
+            }
+            seg._visualPath = result.success ? stockVisualPath : null;
           }
-          if (!result.success) {
-            result = await fetcher.fromWeb(seg.visualQuery || 'news', visualPath);
-          }
-          seg._visualPath = result.success ? visualPath : null;
-          logger.info(`Visual segment ${i} done`, { jobId, success: result.success });
+          
+          logger.info(`Visual segment ${i} done`, { jobId, success: Boolean(seg._visualPath) });
         } catch (vizErr) {
           logger.error(`Visual segment ${i} failed`, { jobId, error: vizErr instanceof Error ? vizErr.message : String(vizErr) });
           seg._visualPath = null;
