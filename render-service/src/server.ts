@@ -615,7 +615,7 @@ app.post('/auto-produce', async (req, res) => {
             fs.writeFileSync(audioPath, audioBuffer);
           }
           seg._audioPath = audioPath;
-          logger.info(`TTS segment ${i} done`, { jobId, chars: seg.script.length });
+          logger.info(`TTS segment ${i} done`, { jobId, chars: textToSpeak.length });
         } catch (ttsErr) {
           logger.error(`TTS segment ${i} failed`, { jobId, error: ttsErr instanceof Error ? ttsErr.message : String(ttsErr) });
           // Write a short silence file as fallback
