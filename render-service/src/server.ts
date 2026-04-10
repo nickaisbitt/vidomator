@@ -482,53 +482,46 @@ app.post('/auto-produce', async (req, res) => {
         const openRouterKey = process.env.OPENROUTER_API_KEY;
         if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not set');
 
-        const llmResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-          model: 'google/gemini-2.0-flash-exp:free',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a professional news script writer for 'The Update Desk' YouTube channel. Write engaging, factual news scripts. ALWAYS respond with valid JSON only, no markdown fences.`
-            },
-            {
-              role: 'user',
-              content: `Write a 2-3 minute news script based on this article:
-
-Title: ${title}
-Source: ${source || 'Unknown'}
-Content: ${(content || '').substring(0, 3000)}
-
-Return ONLY valid JSON (no markdown):
-{
-  "youtubeTitle": "Catchy title under 60 chars",
-  "description": "YouTube description",
-  "tags": ["tag1", "tag2"],
-  "segments": [
-    {
-      "type": "intro",
-      "script": "Spoken text for this segment...",
-      "visualQuery": "search query for stock video",
-      "lowerThird": "LOWER THIRD TEXT"
-    }
-  ]
-}`
-            }
-          ]
-        }, {
-          headers: {
-            'Authorization': `Bearer ${openRouterKey.trim()}`,
-            'Content-Type': 'application/json'
+        const response = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: 'google/gemini-2.0-flash-exp:free',
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a professional broadcast news writer. Write scripts that are objective, engaging, and suitable for high-end news productions.'
+              },
+              {
+                role: 'user',
+                content: `Convert this news story into a 3-5 paragraph video script.
+                Return ONLY a JSON object with this structure:
+                {
+                  "youtubeTitle": "string",
+                  "description": "string",
+                  "tags": ["string"],
+                  "segments": [
+                    { "text": "narration text", "visualQuery": "search term for visuals", "lowerThird": "on-screen text" }
+                  ]
+                }
+                
+                Story: ${title}
+                Content: ${content}`
+              }
+            ]
           },
-          timeout: 45000
-        });
+          {
+            headers: {
+              'Authorization': `Bearer ${openRouterKey.trim()}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 45000
+          }
+        );
 
-        const rawContent = llmResponse.data?.choices?.[0]?.message?.content || '';
-        // Strip markdown fences if present
-        const cleaned = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        scriptData = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-
-        if (!scriptData.segments || scriptData.segments.length === 0) {
-          throw new Error('No segments in LLM response');
+        scriptData = response.data.choices[0].message.content;
+        // Strip code blocks if AI included them
+        if (typeof scriptData === 'string') {
+          scriptData = JSON.parse(scriptData.replace(/```json|```/g, '').trim());
         }
         logger.info('Script generated', { jobId, segments: scriptData.segments.length, title: scriptData.youtubeTitle });
 
@@ -545,16 +538,14 @@ Return ONLY valid JSON (no markdown):
           tags: ['news', 'breaking', 'update desk'],
           segments: [
             {
-              type: 'intro',
-              script: `Welcome to The Update Desk. Today we're covering a major story: ${title}.`,
-              visualQuery: 'news studio broadcast',
-              lowerThird: 'THE UPDATE DESK'
+              text: title ? `Our top story today: ${title}.` : "Welcome to the latest news update.",
+              visualQuery: "news studio broadcast",
+              lowerThird: title?.substring(0, 30) || "BREAKING NEWS"
             },
             {
-              type: 'content',
-              script: (content || 'Details are still emerging on this developing story.').substring(0, 500),
-              visualQuery: title?.split(' ').slice(0, 3).join(' ') || 'world news',
-              lowerThird: title?.substring(0, 40) || 'BREAKING NEWS'
+              text: content?.substring(0, 200) || "We are tracking several developing stories across the globe.",
+              visualQuery: title || "breaking news",
+              lowerThird: "LATEST DEVELOPMENTS"
             }
           ]
         };

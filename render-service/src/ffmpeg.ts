@@ -119,27 +119,36 @@ export class VideoRenderer {
 
         command = command.input(audioPath);
         
-        // RAW ENGINE: Direct CLI arguments for 100% stability
+        // Use high-level fluent-ffmpeg filters for 100% environment compatibility
         command
+          .size('1920x1080')
+          .aspect('16:9')
+          .videoCodec('libx264')
+          .audioCodec('aac')
+          .audioBitrate('128k')
           .outputOptions([
-            '-filter_complex', '[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,format=yuv420p[v]',
-            '-map', '[v]',
-            '-map', '1:a',
-            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
             '-preset', 'fast',
             '-crf', '23',
-            '-c:a', 'aac',
-            '-b:a', '128k',
+            '-movflags', '+faststart',
             '-shortest',
             '-y'
           ]);
 
+        // Add a simple fade if the segment is long enough
+        if (duration > 3) {
+          command.videoFilters([
+            { filter: 'fade', options: `t=in:st=0:d=1` },
+            { filter: 'fade', options: `t=out:st=${(duration - 1).toFixed(2)}:d=1` }
+          ]);
+        }
+
         command
           .output(output)
-          .on('start', (cmd) => console.log(`[INFO] RAW Rendering visual segment: ${cmd}`))
+          .on('start', (cmd) => console.log(`[INFO] Rendering visual segment: ${cmd}`))
           .on('end', () => resolve())
           .on('error', (err) => {
-            console.error(`[ERRO] RAW Rendering failed`, { error: err.message });
+            console.error(`[ERRO] Rendering failed for segment`, { error: err.message, visualPath });
             reject(err);
           })
           .run();
