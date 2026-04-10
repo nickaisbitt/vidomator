@@ -221,25 +221,31 @@ export class VideoRenderer {
     volume: number
   ): Promise<void> {
     return new Promise((resolve, reject) => {
+      // UNBREAKABLE AUDIO: Use stream_loop -1 on music and simple amix
       ffmpeg()
         .input(videoPath)
         .input(musicPath)
+        .inputOptions(['-stream_loop', '-1']) // Loop music at the input level
         .complexFilter([
-          `[1:a]aloop=loop=-1:size=2e+09,volume=${volume}[music]`,
+          `[1:a]volume=${volume}[music]`,
           `[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`
         ])
         .outputOptions([
           '-map', '0:v',
           '-map', '[a]',
-          '-c:v', 'copy',
+          '-c:v', 'copy', // Copy video to save time/CPU
           '-c:a', 'aac',
           '-b:a', '128k',
           '-shortest',
           '-y'
         ])
         .output(output)
+        .on('start', (cmd) => console.log(`[INFO] RAW Music Mix: ${cmd}`))
         .on('end', () => resolve())
-        .on('error', reject)
+        .on('error', (err) => {
+          console.error(`[ERRO] Music mix failed`, { error: err.message });
+          reject(err);
+        })
         .run();
     });
   }

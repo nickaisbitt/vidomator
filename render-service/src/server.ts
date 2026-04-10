@@ -802,6 +802,8 @@ async function ensureMusicLibrary() {
   }
 }
 
+
+
 // Cleanup old jobs (keep last 100)
 setInterval(() => {
   if (jobs.size > 100) {
