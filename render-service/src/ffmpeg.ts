@@ -110,19 +110,22 @@ export class VideoRenderer {
         
         let command = ffmpeg();
         
+        let currentV = 'v';
         if (isImage) {
           // Image input - loop for duration
           command = command.input(visualPath)
             .loop()
             .inputOptions(['-t', String(duration)]);
           
-          // Cinematic Ken Burns Zoom effect for images
-          filters.push(`[0:v]scale=8000:-1,zoompan=z='min(zoom+0.0015,1.5)':d=${Math.ceil(duration * 25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080,setsar=1[v_animated]`);
-          filters.push(`[v_animated]scale=1920:1080,boxblur=20:20[bg];[v_animated]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]`);
+          // Cinematic Ken Burns Zoom effect for images (more robust scale and pan)
+          filters.push(`[0:v]scale=2560:-1,zoompan=z='min(zoom+0.001,1.5)':d=${Math.ceil(duration * 25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080,setsar=1[v_animated]`);
+          filters.push(`[v_animated]scale=1920:1080,boxblur=20:20[bg];[v_animated]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]`);
+          currentV = 'v_layered';
         } else {
           // Video input - infinite loop to patch shorter videos
           command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
-          filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]');
+          filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]');
+          currentV = 'v_layered';
         }
         
         command = command.input(audioPath);
@@ -130,11 +133,13 @@ export class VideoRenderer {
         // Add lower third if specified
         if (segment.lowerThird) {
           const lowerThirdFilter = this.buildLowerThirdFilter(segment.lowerThird, duration);
-          filters.push(`[v]${lowerThirdFilter}[v]`);
+          filters.push(`[${currentV}]${lowerThirdFilter}[v_text]`);
+          currentV = 'v_text';
         }
         
         // Add a subtle fade in/out for smoother transitions
-        filters.push(`[v]fade=t=in:st=0:d=1,fade=t=out:st=${duration - 1}:d=1[v_faded]`);
+        const fadeStart = Math.max(0, duration - 1);
+        filters.push(`[${currentV}]fade=t=in:st=0:d=1,fade=t=out:st=${fadeStart}:d=1[v_faded]`);
         
         command.complexFilter(filters)
           .outputOptions([
