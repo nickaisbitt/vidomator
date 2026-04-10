@@ -64,6 +64,42 @@ interface JobStatus {
   updatedAt: Date;
 }
 
+// Queue Processing variables
+const jobQueue: Array<{
+  jobId: string;
+  output: string;
+  segments: any[];
+  music?: string;
+  musicVolume?: number;
+  thumbnail?: any;
+}> = [];
+let isProcessingQueue = false;
+
+async function processNextJob() {
+  if (isProcessingQueue || jobQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  const jobArgs = jobQueue.shift();
+  if (jobArgs) {
+    try {
+      await processVideo(
+        jobArgs.jobId,
+        jobArgs.output,
+        jobArgs.segments,
+        jobArgs.music,
+        jobArgs.musicVolume,
+        jobArgs.thumbnail
+      );
+    } catch (err) {
+      logger.error('Queue processing error', { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  isProcessingQueue = false;
+  // Trigger next job in queue automatically
+  setImmediate(processNextJob);
+}
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
@@ -97,13 +133,21 @@ app.post('/render', async (req, res) => {
 
      logger.info('Starting video render', { jobId, segments: segments.length });
 
-    // Start processing in background
-    processVideo(jobId, output, segments, music, musicVolume, thumbnail);
+    // Start processing asynchronously in heavily guarded Queue
+    jobQueue.push({
+      jobId,
+      output,
+      segments,
+      music,
+      musicVolume,
+      thumbnail
+    });
+    setImmediate(processNextJob);
 
     res.json({ 
       jobId, 
-      status: 'processing',
-      message: 'Video rendering started'
+      status: 'pending', // Queue architecture state
+      message: 'Video added to render queue'
     });
 
   } catch (error) {
@@ -291,6 +335,42 @@ app.post('/generate-seedance', async (req, res) => {
      logger.error('Failed to generate Seedance clip', { error: error instanceof Error ? error.message : String(error) });
     res.status(500).json({
       error: 'Failed to generate Seedance clip',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Generate Free TTS via Google API as a fallback
+app.post('/generate-free-tts', async (req, res) => {
+  try {
+    const { text, output, lang = 'en', slow = false } = req.body;
+    if (!text || !output) {
+      return res.status(400).json({ error: 'Missing required fields: text, output' });
+    }
+    
+    const googleTTS = require('google-tts-api');
+    
+    // For long text, split into 200 character chunks and download streams securely
+    const results = await googleTTS.getAllAudioBase64(text, {
+      lang: lang,
+      slow: slow,
+      host: 'https://translate.google.com',
+      timeout: 10000,
+    });
+    
+    // Stitch Base64 string buffers into MP3 output
+    const audioBuffer = Buffer.concat(
+      results.map((result: any) => Buffer.from(result.base64, 'base64'))
+    );
+    fs.writeFileSync(output, audioBuffer);
+    
+    logger.info('Generated Free TTS string', { characters: text.length, output });
+    res.json({ success: true, path: output });
+    
+  } catch (error) {
+     logger.error('Failed to generate Free TTS', { error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({
+      error: 'Failed to generate Free TTS',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
