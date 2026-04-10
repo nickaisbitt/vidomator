@@ -119,36 +119,24 @@ export class VideoRenderer {
 
         command = command.input(audioPath);
         
-        // Use high-level fluent-ffmpeg filters for 100% environment compatibility
+        // ABSOLUTE RECOVERY: Zero complex filters. Raw resolution and mapping only.
         command
           .size('1920x1080')
-          .aspect('16:9')
           .videoCodec('libx264')
           .audioCodec('aac')
-          .audioBitrate('128k')
           .outputOptions([
             '-pix_fmt', 'yuv420p',
-            '-preset', 'fast',
-            '-crf', '23',
-            '-movflags', '+faststart',
-            '-shortest',
+            '-preset', 'veryfast',
+            '-crf', '28',
             '-y'
           ]);
 
-        // Add a simple fade if the segment is long enough
-        if (duration > 3) {
-          command.videoFilters([
-            { filter: 'fade', options: `t=in:st=0:d=1` },
-            { filter: 'fade', options: `t=out:st=${(duration - 1).toFixed(2)}:d=1` }
-          ]);
-        }
-
         command
           .output(output)
-          .on('start', (cmd) => console.log(`[INFO] Rendering visual segment: ${cmd}`))
+          .on('start', (cmd) => console.log(`[INFO] RECOVERY Rendering: ${cmd}`))
           .on('end', () => resolve())
           .on('error', (err) => {
-            console.error(`[ERRO] Rendering failed for segment`, { error: err.message, visualPath });
+            console.error(`[ERRO] RECOVERY Rendering failed`, { error: err.message });
             reject(err);
           })
           .run();

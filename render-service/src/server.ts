@@ -479,8 +479,10 @@ app.post('/auto-produce', async (req, res) => {
       logger.info('Step 1: Generating script via OpenRouter', { jobId });
       let scriptData: any;
       try {
-        const openRouterKey = process.env.OPENROUTER_API_KEY;
+        let openRouterKey = process.env.OPENROUTER_API_KEY;
         if (!openRouterKey) throw new Error('OPENROUTER_API_KEY not set');
+        // SANITIZATION: Remove any potential hidden whitespace/chars from Railway env
+        openRouterKey = openRouterKey.trim().replace(/[\r\n]/g, '');
 
         const response = await axios.post(
           'https://openrouter.ai/api/v1/chat/completions',
