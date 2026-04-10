@@ -370,7 +370,7 @@ app.post('/generate-free-tts', async (req, res) => {
     );
     fs.writeFileSync(output, audioBuffer);
     
-    logger.info('Generated Free TTS string', { characters: text.length, output });
+    logger.info('Generated Free TTS string', { characters: (text || "").length, output });
     res.json({ success: true, path: output });
     
   } catch (error) {
@@ -485,8 +485,9 @@ app.post('/auto-produce', async (req, res) => {
         openRouterKey = openRouterKey.trim().replace(/[\r\n]/g, '');
         
         // AUTH PROBE: Log safe diagnostic info
-        if (openRouterKey) {
-            console.log(`[INFO] AI Key Probe: Length=${openRouterKey.length}, Prefix=${openRouterKey.substring(0, 10)}...`);
+        const safeKey = openRouterKey || '';
+        if (safeKey.length > 0) {
+            console.log(`[INFO] AI Key Probe: Length=${safeKey.length}, Prefix=${safeKey.substring(0, 10)}...`);
         } else {
             console.warn(`[WARN] AI Key Probe: OPENROUTER_API_KEY is missing!`);
         }
@@ -584,11 +585,11 @@ app.post('/auto-produce', async (req, res) => {
 
         try {
           if (speechifyKey) {
-            logger.info(`Using Speechify for segment ${i}`, { jobId });
+            const input = sanitizedText || '';
             const speechifyResponse = await axios.post(
               'https://api.speechify.ai/v1/audio/stream',
               {
-                input: sanitizedText,
+                input: input,
                 voice_id: 'nick',
                 model: 'simba-english',
                 audio_format: 'mp3',
@@ -606,7 +607,7 @@ app.post('/auto-produce', async (req, res) => {
                 timeout: 30000
               }
             );
-            fs.writeFileSync(audioPath, Buffer.from(speechifyResponse.data));
+            fs.writeFileSync(audioPath, Buffer.from(speechifyResponse.data || ''));
           } else {
             // Fallback to Google TTS
             const googleTTS = require('google-tts-api');
