@@ -117,8 +117,8 @@ export class VideoRenderer {
             .loop()
             .inputOptions(['-t', String(duration)]);
           
-          // Cinematic Ken Burns Zoom effect for images (more robust scale and pan)
-          filters.push(`[0:v]scale=2560:-1,zoompan=z='min(zoom+0.001,1.5)':d=${Math.ceil(duration * 25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080,setsar=1[v_animated]`);
+          // Use a robust cinematic color grade and vignette instead of zoompan
+          filters.push(`[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,vignette=angle=0.5,curves=preset=vintage[v_animated]`);
           filters.push(`[v_animated]scale=1920:1080,boxblur=20:20[bg];[v_animated]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v_layered]`);
           currentV = 'v_layered';
         } else {
@@ -138,8 +138,9 @@ export class VideoRenderer {
         }
         
         // Add a subtle fade in/out for smoother transitions
-        const fadeStart = Math.max(0, duration - 1);
-        filters.push(`[${currentV}]fade=t=in:st=0:d=1,fade=t=out:st=${fadeStart}:d=1[v_faded]`);
+        const fadeDuration = Math.min(1, duration / 4);
+        const fadeStart = Math.max(0, duration - fadeDuration);
+        filters.push(`[${currentV}]fade=t=in:st=0:d=${fadeDuration},fade=t=out:st=${fadeStart}:d=${fadeDuration}[v_faded]`);
         
         command.complexFilter(filters)
           .outputOptions([
