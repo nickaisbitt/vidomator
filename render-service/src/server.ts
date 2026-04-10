@@ -259,13 +259,13 @@ app.post('/generate-image', async (req, res) => {
     let result = await fetcher.generateImage(prompt, output, model, aspectRatio);
     
     if (!result.success) {
-      logger.warn('OpenRouter image generation failed, falling back to Web image search', { error: result.error, prompt });
-      result = await fetcher.fromWeb(prompt, output);
+      logger.warn('OpenRouter image generation failed, falling back to Pixabay HD Videos', { error: result.error, prompt });
+      result = await fetcher.fromPixabay(prompt, output);
     }
     
     if (!result.success) {
-      logger.warn('Web search image fallback failed, falling back to Pixabay', { error: result.error, prompt });
-      result = await fetcher.fromPixabay(prompt, output);
+      logger.warn('Pixabay HD Video fallback failed, falling back to Web image search', { error: result.error, prompt });
+      result = await fetcher.fromWeb(prompt, output);
     }
     
     res.json(result);

@@ -116,8 +116,8 @@ export class VideoRenderer {
             .loop()
             .inputOptions(['-t', String(duration)]);
         } else {
-          // Video input
-          command = command.input(visualPath);
+          // Video input - infinite loop to patch shorter videos
+          command = command.input(visualPath).inputOptions(['-stream_loop', '-1']);
         }
         
         command = command.input(audioPath);
@@ -125,8 +125,8 @@ export class VideoRenderer {
         // Build filter complex
         const filters: string[] = [];
         
-        // Scale to 1920x1080
-        filters.push('[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1[v]');
+        // Scale to 1920x1080 with premium cinematic blurred background
+        filters.push('[0:v]scale=1920:1080,setsar=1,boxblur=20:20[bg];[0:v]scale=1920:1080:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[v]');
         
         // Add lower third if specified
         if (segment.lowerThird) {
@@ -202,9 +202,9 @@ export class VideoRenderer {
   private buildLowerThirdFilter(text: string, duration: number): string {
     const escapedText = text.replace(/'/g, "'\\''");
     
-    // News-style lower third with red bar
+    // News-style lower third with red bar and dynamic shadow
     return `drawbox=x=0:y=h-120:w=iw:h=120:color=red@0.9:t=fill,` +
-           `drawtext=text='${escapedText}':fontcolor=white:fontsize=42:` +
+           `drawtext=text='${escapedText}':fontcolor=white:fontsize=42:shadowcolor=black@0.6:shadowx=3:shadowy=3:` +
            `x=50:y=h-85:fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf`;
   }
 
