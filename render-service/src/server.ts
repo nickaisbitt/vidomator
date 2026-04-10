@@ -573,7 +573,10 @@ app.post('/auto-produce', async (req, res) => {
 
       for (let i = 0; i < scriptData.segments.length; i++) {
         const seg = scriptData.segments[i];
-        const audioPath = path.join(audioDir, `${videoId}_${i}.mp3`);
+        const audioPath = path.join(audioDir, `tts_${jobId}_${i}.mp3`);
+        
+        // Final Resilience: Combine all possible script fields
+        const sanitizedText = seg.text || seg.script || (seg as any).content || 'No narration available';
 
         try {
           if (speechifyKey) {
@@ -581,7 +584,7 @@ app.post('/auto-produce', async (req, res) => {
             const speechifyResponse = await axios.post(
               'https://api.speechify.ai/v1/audio/stream',
               {
-                input: seg.text,
+                input: sanitizedText,
                 voice_id: 'nick',
                 model: 'simba-english',
                 audio_format: 'mp3',
@@ -603,7 +606,7 @@ app.post('/auto-produce', async (req, res) => {
           } else {
             // Fallback to Google TTS
             const googleTTS = require('google-tts-api');
-            const results = await googleTTS.getAllAudioBase64(seg.script, {
+            const results = await googleTTS.getAllAudioBase64(sanitizedText, {
               lang: 'en',
               slow: false,
               host: 'https://translate.google.com',
@@ -615,7 +618,7 @@ app.post('/auto-produce', async (req, res) => {
             fs.writeFileSync(audioPath, audioBuffer);
           }
           seg._audioPath = audioPath;
-          logger.info(`TTS segment ${i} done`, { jobId, chars: textToSpeak.length });
+          logger.info(`TTS segment ${i} done`, { jobId, chars: sanitizedText.length });
         } catch (ttsErr) {
           logger.error(`TTS segment ${i} failed`, { jobId, error: ttsErr instanceof Error ? ttsErr.message : String(ttsErr) });
           // Write a short silence file as fallback
