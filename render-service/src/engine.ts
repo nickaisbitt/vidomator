@@ -380,7 +380,7 @@ app.post('/generate-thumbnail', async (req, res) => {
       const oauth2Client = new google.auth.OAuth2(
         YOUTUBE_CLIENT_ID,
         YOUTUBE_CLIENT_SECRET,
-        'http://localhost:3000/oauth2callback' // Native redirect block
+        process.env.OAUTH_REDIRECT_URI || 'http://localhost:3000/oauth2callback' // Native redirect block
       );
 
       oauth2Client.setCredentials({ refresh_token: YOUTUBE_REFRESH_TOKEN });
@@ -535,10 +535,10 @@ app.post('/generate-thumbnail', async (req, res) => {
             if (speechifyKey) {
               const input = sanitizedText || '';
               const speechifyResponse = await axios.post(
-                'https://api.speechify.ai/v1/audio/stream',
+                'https://api.sws.speechify.com/v1/audio/speech',
                 {
                   input: input,
-                  voice_id: 'nick',
+                  voice_id: 'george',
                   model: 'simba-english',
                   audio_format: 'mp3',
                   options: { text_normalization: false, loudness_normalization: true }
@@ -549,10 +549,14 @@ app.post('/generate-thumbnail', async (req, res) => {
                     'Content-Type': 'application/json'
                   },
                   responseType: 'arraybuffer',
-                  timeout: 30000
+                  timeout: 60000
                 }
               );
-              fs.writeFileSync(audioPath, Buffer.from(speechifyResponse.data || ''));
+              const audioBuffer = Buffer.from(speechifyResponse.data);
+      if (audioBuffer.length < 1000) {
+        throw new Error(`Speechify returned suspiciously small audio (${audioBuffer.length} bytes) - possible API error`);
+      }
+      fs.writeFileSync(audioPath, audioBuffer);
             } else {
               // Fallback to Google TTS
               const googleTTS = require('google-tts-api');
@@ -689,7 +693,7 @@ app.post('/generate-thumbnail', async (req, res) => {
             const oauth2Client = new google.auth.OAuth2(
               YOUTUBE_CLIENT_ID,
               YOUTUBE_CLIENT_SECRET,
-              'http://localhost:3000/oauth2callback'
+              process.env.OAUTH_REDIRECT_URI || 'http://localhost:3000/oauth2callback'
             );
             oauth2Client.setCredentials({ refresh_token: YOUTUBE_REFRESH_TOKEN });
             const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
