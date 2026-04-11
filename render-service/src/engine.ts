@@ -158,6 +158,32 @@ try {
     res.json(job);
   });
 
+// Standalone Thumbnail Generation
+app.post('/generate-thumbnail', async (req, res) => {
+  try {
+    const { output, title, image, style = 'viral-news' } = req.body;
+    if (!title) {
+       return res.status(400).json({ error: 'Missing title for thumbnail' });
+    }
+    
+    const thumbnailGen = new ThumbnailGenerator(logger);
+    const finalOutput = output || path.join(process.env.FILES_BASE_PATH || '/files', 'images', `thumb_${Date.now()}.jpg`);
+    
+    await thumbnailGen.generate({
+      output: finalOutput,
+      title,
+      image,
+      style
+    });
+
+    res.json({ success: true, path: finalOutput });
+
+  } catch (error) {
+    logger.error('Failed to generate standalone thumbnail', { error: error instanceof Error ? error.message : String(error) });
+    res.status(500).json({ error: 'Thumbnail generation failed', details: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
   // Check if an article has already been covered
   app.post('/check-coverage', (req, res) => {
     const { link, title } = req.body;
@@ -632,6 +658,27 @@ try {
         job.progress = 90;
         job.updatedAt = new Date();
         jobs.set(jobId, job);
+
+        // ---- STEP 4.5: Generate Branded Thumbnail ----
+        logger.info('Step 4.5: Generating branded thumbnail', { jobId });
+        try {
+          const thumbPath = outputPath.replace('.mp4', '_thumb.jpg');
+          const thumbnailGen = new ThumbnailGenerator(logger);
+          
+          // Use the first segment visual as background if available
+          const bgImage = renderSegments[0]?._visualPath;
+          
+          await thumbnailGen.generate({
+            output: thumbPath,
+            title: scriptData.youtubeTitle || title,
+            image: bgImage,
+            style: 'viral-news'
+          });
+          
+          logger.info('Auto-produce thumbnail generated', { jobId, thumbPath });
+        } catch (thumbErr) {
+          logger.error('Auto-produce thumbnail failed (non-terminal)', { jobId, error: thumbErr instanceof Error ? thumbErr.message : String(thumbErr) });
+        }
 
         // ---- STEP 5: Upload to YouTube ----
         logger.info('Step 5: Uploading to YouTube', { jobId, outputPath });
