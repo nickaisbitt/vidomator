@@ -548,15 +548,19 @@ app.post('/generate-thumbnail', async (req, res) => {
                     'Authorization': `Bearer ${speechifyKey}`,
                     'Content-Type': 'application/json'
                   },
-                  responseType: 'arraybuffer',
                   timeout: 60000
                 }
               );
-              const audioBuffer = Buffer.from(speechifyResponse.data);
-      if (audioBuffer.length < 1000) {
-        throw new Error(`Speechify returned suspiciously small audio (${audioBuffer.length} bytes) - possible API error`);
-      }
-      fs.writeFileSync(audioPath, audioBuffer);
+              
+              if (!speechifyResponse.data || !speechifyResponse.data.audio_data) {
+                throw new Error('Speechify API did not return audio_data');
+              }
+              
+              const audioBuffer = Buffer.from(speechifyResponse.data.audio_data, 'base64');
+              if (audioBuffer.length < 1000) {
+                throw new Error(`Speechify returned suspiciously small audio (${audioBuffer.length} bytes) - possible API error`);
+              }
+              fs.writeFileSync(audioPath, audioBuffer);
             } else {
               // Fallback to Google TTS
               const googleTTS = require('google-tts-api');
