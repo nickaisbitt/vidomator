@@ -77,10 +77,11 @@ export class VideoRenderer {
        
        let cmd: string;
        if (isImage) {
-         cmd = `ffmpeg -loop 1 -i "${visualPath}" -i "${audioPath}" -c:v libx264 -t 10 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
+         // Use -shortest to match audio length for image loop
+         cmd = `ffmpeg -loop 1 -i "${visualPath}" -i "${audioPath}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
        } else {
-         // Loop video to match audio length
-         cmd = `ffmpeg -stream_loop -1 -i "${visualPath}" -i "${audioPath}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
+         // Loop video to match audio length - try to be more robust with -fflags +genpts
+         cmd = `ffmpeg -stream_loop -1 -fflags +genpts -i "${visualPath}" -i "${audioPath}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
        }
        
        console.log(`[INFO] Surgically processing segment: ${output}`);
