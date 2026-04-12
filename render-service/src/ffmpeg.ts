@@ -78,10 +78,10 @@ export class VideoRenderer {
        let cmd: string;
        if (isImage) {
          // Use -shortest to match audio length for image loop
-         cmd = `ffmpeg -loop 1 -i "${visualPath}" -i "${audioPath}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
+         cmd = `ffmpeg -loop 1 -i "${visualPath}" -i "${audioPath}" -c:v libx264 -vf "scale=1280:720" -pix_fmt yuv420p -preset ultrafast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
        } else {
-         // Loop video to match audio length - try to be more robust with -fflags +genpts
-         cmd = `ffmpeg -stream_loop -1 -fflags +genpts -i "${visualPath}" -i "${audioPath}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
+         // Use -stream_loop -1 to loop the video, but also use -shortest and -fflags +genpts
+         cmd = `ffmpeg -stream_loop -1 -i "${visualPath}" -i "${audioPath}" -vf "scale=1280:720" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 28 -c:a aac -b:a 128k -shortest -y "${output}"`;
        }
        
        console.log(`[INFO] Surgically processing segment: ${output}`);
@@ -113,7 +113,7 @@ export class VideoRenderer {
       mapA = '[a]';
     }
 
-    const finalCmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "${mapV}" -map "${mapA}" -c:v libx264 -pix_fmt yuv420p -preset veryfast -crf 28 -c:a aac -b:a 128k -y "${output}"`;
+    const finalCmd = `ffmpeg ${inputs} -filter_complex "${filter}" -map "${mapV}" -map "${mapA}" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 28 -c:a aac -b:a 128k -y "${output}"`;
     
     console.log(`[INFO] Scorched Earth Final Assembly: ${finalCmd}`);
     await execAsync(finalCmd);
