@@ -535,7 +535,7 @@ app.post('/generate-thumbnail', async (req, res) => {
             if (speechifyKey) {
               const input = sanitizedText || '';
               const speechifyResponse = await axios.post(
-                'https://api.sws.speechify.com/v1/audio/speech',
+                'https://api.speechify.ai/v1/audio/stream',
                 {
                   input: input,
                   voice_id: 'george',
@@ -548,15 +548,12 @@ app.post('/generate-thumbnail', async (req, res) => {
                     'Authorization': `Bearer ${speechifyKey}`,
                     'Content-Type': 'application/json'
                   },
+                  responseType: 'arraybuffer',
                   timeout: 60000
                 }
               );
               
-              if (!speechifyResponse.data || !speechifyResponse.data.audio_data) {
-                throw new Error('Speechify API did not return audio_data');
-              }
-              
-              const audioBuffer = Buffer.from(speechifyResponse.data.audio_data, 'base64');
+              const audioBuffer = Buffer.from(speechifyResponse.data);
               if (audioBuffer.length < 1000) {
                 throw new Error(`Speechify returned suspiciously small audio (${audioBuffer.length} bytes) - possible API error`);
               }
