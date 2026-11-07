@@ -1,49 +1,48 @@
 # Dependencies
-**/node_modules/
-**/.pnp
-**/.pnp.js
+node_modules/
+.pnp
+.pnp.js
 
-# Testing
-coverage/
-*.log
-test-output/
+# Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
 
-# Production
+# Build and test output
 build/
 dist/
+coverage/
+test-output/
+
+# Runtime data and generated artifacts
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
+tool-results/
+download/*
+!download/README.md
+/public/generated/
+*.log
 
 # Environment variables
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Secrets
 .secrets/
 *.key
 *.pem
 
-# OS files
+# OS / IDE / temporary files
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Railway
-.railway/
-
-# Temporary files
 tmp/
 temp/
 *.tmp
-
-# Secret files
-exchange-token.js
-n8n-uploader.js
-render-service/exchange-token.js
-scripts/exchange-token.js

@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// A radio station identity, born from one prompt (Station Charter)
+model Station {
+  id          String    @id @default(cuid())
+  name        String
+  handle      String    @unique // slug used in file paths
+  tagline     String    @default("")
+  genre       String    @default("")
+  charterJson String    @default("{}") // full charter: persona, idents, visualStyle, formatNotes...
+  paletteJson String    @default("[]") // hex colors
+  costJson    String    @default("{}") // units spent creating this station
+  createdAt   DateTime  @default(now())
+  episodes    Episode[]
+}
+
+// One rendered episode of a station
+model Episode {
+  id            String     @id @default(cuid())
+  stationId     String
+  station       Station    @relation(fields: [stationId], references: [id])
+  title         String
+  prompt        String     @default("") // optional concept prompt for this episode
+  status        String     @default("running") // running | ready | failed
+  rundownJson   String     @default("{}") // EpisodeRundown
+  qcScore       Int?
+  qcJson        String? // full scorecard
+  metadataJson  String? // MetadataPack (SEO)
+  attributionMd String? // ATTRIBUTION.md content
+  durationSec   Int?
+  videoPath     String?
+  thumbPath     String?
+  costJson      String     @default("{}") // { llm: n, image: n, ttsChars: n, vlm: n, ffmpegSec: n }
+  seed          Int        @default(0) // synth/arrangement seed for reproducibility
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  stages        StageRun[]
+  assets        Asset[]
+}
+
+// One pipeline stage execution (live progress + resumability)
+model StageRun {
+  id         String    @id @default(cuid())
+  episodeId  String
+  episode    Episode   @relation(fields: [episodeId], references: [id])
+  order      Int
+  key        String
+  name       String
+  status     String    @default("pending") // pending | running | done | failed
+  retries    Int       @default(0) // auto-retry budget consumed (autonomous runner)
+  outputJson String? // stage result / partial sub-progress
+  error      String?
+  ms         Int?
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@unique([episodeId, key])
+}
+
+// Episode queue — channel factory: one prompt → station + a run of episodes
+model QueueItem {
+  id        String   @id @default(cuid())
+  stationId String?
+  prompt    String   @default("") // episode concept ("" = standard programming)
+  status    String   @default("pending") // pending | running | done | failed
+  episodeId String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Every generated file with full provenance — the compliance ledger
+model Asset {
+  id          String   @id @default(cuid())
+  episodeId   String
+  episode     Episode  @relation(fields: [episodeId], references: [id])
+  kind        String // image | audio | video | doc
+  role        String // hero | scene | ident | music | loop | silent | master | thumb | credits | attribution
+  path        String // path under /public
+  prompt      String   @default("")
+  tool        String // zai-image | zai-tts | synth-engine | ffmpeg | pipeline
+  model       String   @default("")
+  license     String   @default("self-generated")
+  attribution String   @default("")
+  metaJson    String   @default("{}")
+  createdAt   DateTime @default(now())
+}
